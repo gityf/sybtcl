@@ -1,0 +1,38 @@
+# This file contains a top-level script to run all of the Tcl
+# tests.  Execute it by invoking "source all" when running tclTest
+# in this directory.
+#
+# SCCS: @(#) all 1.8 97/08/01 11:07:14
+
+
+if {$tcl_platform(os) == "Win32s"} {
+    set files [glob *.tes]
+} else {
+    set files [glob *.test]
+}
+
+source defs
+
+foreach i [lsort $files] {
+    if [string match l.*.test $i] {
+	# This is an SCCS lock file;  ignore it.
+	continue
+    }
+    puts stdout $i
+    if [catch {source $i} msg] {
+	puts $msg
+    }	
+}
+
+
+puts "\n\ncleaning up sybtcl test objects, (drop table and procedures, delete test file)"
+
+catch {drop_table}
+catch {file delete sybtcl.dat}
+catch {sybclose $syb_hand}
+
+# if memory debugging turned on, checkpoint memory usage
+
+catch {checkmem sybtcl.mem}
+
+exit 0

@@ -1,0 +1,220 @@
+Sybtcl
+
+INSTALLATION
+
+For installation on win and mac platforms, see the relevant README
+files in the ./win and ./mac directories.  The rest of this document
+is focused on Un*x/Linux and similar environments.
+
+Sybtcl by default builds as a shared library, or you can build it as a 
+statically linked executable, with or without the fine Extended Tcl (TclX)
+extension.
+
+Sybtcl supports building a shared library by default that can be
+loaded using Tcl's 'package require' or 'load' commands.
+Static libraries and executables can be built by configuring
+with --disable-shared.
+
+First, I would recommend that you start from a working Tcl/TclX/Tk base.
+Compile all the code, run the 'test' targets, try out the tcl and wishx
+interpreters.  Install tcl and wish into public directories (e.g.
+/usr/local/bin) and the Tcl, TclX, and Tk library code (e.g., /usr/local/lib)
+Also try out the widget demos from the Tk package.  Everything works? Good,
+now you can start on Sybtcl.
+
+Un-tar the Sybtcl distribution in a sibling directory to tcl8.3, tk8.3,
+and (optionally) tclX8.2 (or the most current versions of each distribution).
+
+If you are working in a TEA-compatible environment (Tcl 8.2.x or newer on
+Unix or under cygwin32), you should be able to do ./configure and make in
+the sybtcl top-level directory.  This will build sybtcl as a stub-
+enabled shared library.  See below for details on items that can be 
+changed with './configure'.
+
+If you are using an older version of Tcl or desire some variant from the
+above build, you should cd to the 'unix' directory first, then run
+'./configure'.  Configure recognizes the following options:
+
+  --prefix=DIR         where to install man, bin, and lib
+  --exec-prefix=DIR    where to install bin and lib, if different than --prefix
+		       the paths you specify should be the same as the paths
+		       you specified when you configured Tcl and Tk.  Sybtcl's
+		       configure script uses the tclConfig.sh file that
+		       was installed by Tcl in these locations.
+
+
+  package options:     --with-tk --with-tclx --disable-shared  --enable-ctlib
+
+  --with-tk            build static executable with Tk.
+                       use "--without-tk" if you don't have Tk installed,
+                       default is "--with-tk". This is only recognized if
+		       you also have specified "--disable-shared"
+
+  --with-tclx          build static executable with Extended Tcl (TclX).
+                       use "--without-tclx" if you don't have TclX installed,
+                       default is "--without-tclx". This is only recognized if
+		       you also have specified "--disable-shared"
+ 
+  --disable-shared     disable building shared library,  build static libraries
+		       and executables instead.
+		       The default is to build a shared library.
+
+                       If you use "--enable-shared", configure sets
+                       "--without-tk" and "--without-tclx", since the shared
+                       library can be loaded into tclsh, tcl, wish, and/or
+                       wishx as needed.
+
+                     * NOTE: --enable-shared can only be specified if your
+                       Sybase distribution includes a shared library object,
+                       e.g $SYBASE/lib/libsybdb.so (architecture appropriate
+                       shared library extension).
+
+                     * NOTE 2: It is highly recommended that you have 
+		       configured Tcl with '--enable-shared'.  The configure
+		       and Makefile for Sybtcl uses information in tclConfig.sh
+		       for searching for dynamic libraries at run time.  This
+		       information is only included in tclConfig.sh if Tcl
+		       was configured with --enabled-shared.  Otherwise, it
+		       may be necessary that you include the path to your
+		       Sybase libraries in the environment variable used for
+		       searching for dynamic libraries, typically
+		       LD_LIBRARY_PATH or LPATH, depending on your cpu/os.
+		       See the man pages for ld(1), ldd(1), chatr(1) or 
+		       dlopen(3) for details and the correct flag for 
+		       your cpu/os.  
+
+  --enable-ctlib       build Sybtcl using Sybase's CT-Lib.  This option
+                       is normally NOT RECOMMENDED.  Sybtcl is written to
+                       use Sybase's DB-Lib.  --enable-ctlib is designed for
+		       systems that do not have DB-Lib available.
+		       See the ./ctcompat directory for more information,
+		       README.ctcompat.  ALSO NOTE- not all tests will
+		       pass when using the ctcompat lib.  As of Sybtcl-3.0,
+		       certain background event processing tests are likely
+		       to behave differently.
+
+
+  the following maybe specified, but configure tries to find the
+  paths on its own if not specified:
+
+  --with-sybase-directory=DIR   where to find the Sybase home directory,
+				 include/sybdb.h  lib/libsybdb.a  
+
+
+
+You should specify the same "--prefix=DIR" and "--exec-prefix=DIR" as when you
+built Tcl, Tk, and TclX.
+ 
+The configure script tries to find Tcl, Tk, and TclX installation files in the
+same directory path as specified with --prefix= (default /usr/local).  
+Configure expects to find $prefix/lib/tclConfig.sh, tkConfig.sh, and 
+tclxConfig.sh; $prefix/include/ for tcl/tk/tclx include files; 
+$prefix/lib/ for tcl/tk/tclx libraries.
+ 
+The environment variable SYBASE is used to find the Sybase libraries, or
+specify the Sybase home using --with-sybase-directory=.
+ 
+If configure cannot find the paths to Tcl, Tk, TclX, or Sybase, configure
+will halt with a message.
+
+Manual editing of the Makefile may be necessary if configure reports a warning.
+Also check the value of the 'OTHER_LD_SEARCH_FLAGS' if you are building
+the dynamic library version of Sybtcl, adding flags specific to your 
+environment to help find the shared libraries at runtime, such as -R on 
+Solaris with SunPro cc.
+
+After configure runs, examine 'Makefile', or just 'make' and see what happens.
+
+If you specified '--enable-shared' (the default) while running configure, a 
+shared library will be built.  Otherwise, if you specified '--disable-shared',
+a static library will be built and executables created.  If a static library 
+is built, the Makefile gathers up the Sybase library and bundles the objects 
+into libSybtcl.a along with sybtcl.o.  
+
+The default executables are `tclsh' and `wish', or `tcl' and `wishx' if
+--with-tclx is specified.  If different executable names are desired,
+you should edit the Makefile.
+
+"make install" will copy the resulting executables, library and man page into 
+the specified directories.  If you specified '--enable-shared', a 
+pkgIndex.tcl file is built or modified.
+
+Note on pkgIndex.tcl:  The Makefile builds a pkgIndex.tcl file, and installs
+it into a versioned Sybtcl directory.  This scheme works for Tcl 8.0 and 
+later.  
+
+Optionally, you can "make install-tools" to copy the wisqlite program to
+a directory, and change the #! interpreter line to reflect the Makefile
+values.  Also installed are sybmon and sp_who.
+
+"make clean" will delete the .o files, executables, formatted man page,
+and configure cache files.  "make really-clean" cleans up the Makefile,
+libtmp, config.status, and other junk.
+
+You can add Sybtcl to other Tcl/Tk interpreters.  Add a call to
+"Sybtcl_Init(interp)" to your tclAppInit.c or tkAppInit.c module, and link
+with libSybtcl.a.  If you are linking several extensions you may consider
+using Tcl-my-fancy, a small package I wrote to aid this task.  See
+ftp://ftp.neosoft.com/pub/tcl/devel/tcl-my-fancy-3.0.tar.gz
+
+Try out the sample Sybtcl scripts.  It's also fun to start the tcl
+interpreter, and just type in code on the fly.  Try benign SQL commands
+at first, say:
+	$ tcl
+	tcl> sybconnect userid passwd   ** use a valid userid and passwd **
+	tcl> sybsql sybtcl0 sp_who
+	tcl> sybnext sybtcl0
+	tcl> sybnext sybtcl0
+	tcl> sybcols sybtcl0
+	tcl> parray sybmsg
+
+
+ADDITIONAL APPS
+
+De Clark has built some wonder applications using Sybtcl, including the
+feature-rich full version of Wisql.  Visit her site at:
+
+    http://www.ucolick.org/~de/Tcl/
+
+and visit the UCO Lick Tcl/Tk source code link to view and download all
+these applications.
+
+
+TEST SUITE
+
+Beginning with Sybtcl 3.0, a test suite is included.  Type 'make tests'
+to begin running the test suite.  You must supply an id, password, server
+name, and database in which the test suite can build a small (30 row)
+test table and stored procedure.  The test suite will also insert 
+image and text columns of up to 1.5 mb.  All tables and stored procedures
+created during the test suite are cleaned up at exit.
+
+The database in which you perform test must have the option 
+'select into/bulkcopy' set to true, otherwise the text/image tests
+may fill your log device.  To set the option, have your DBA execute:
+	use master
+	go
+	sp_dboption your_db_name, 'select into/bulkcopy', true	
+	go
+	use your_db_name
+	go
+	checkpoint
+	go
+
+DOCS
+
+The man page was written using -man macros.  Use your favorite nroff/troff
+formatter, e.g. 
+	nroff -man sybtcl.man > sybtcl.nr
+	troff -Talw -man sybtcl.man | alw > sybtcl.ps
+	psroff -Tdtps -t -man sybtcl.man > sybtcl.ps
+	groff -Tps -t -man sybtcl.man > sybtcl.ps
+
+Tom Phelps' rman program is used to generate HTML from the man page.
+See his TkMan and RosettaMan packages.
+
+Man pages built as text, Postscript, and HTML are provided.
+
+
+Tom Poindexter
+tpoindex@nyx.net

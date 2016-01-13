@@ -1,0 +1,89 @@
+# Makefile.vc
+#
+# This makefile builds example.dll, an example of a dynamically
+# loadable Tcl extension.  This makefile is suitable for use with
+# Microsoft Visual C++ 2.x and 4.0.
+#
+# Copyright (c) 1996 Sun Microsystems, Inc.
+# SCCS: @(#) makefile.vc 1.3 96/04/24 13:28:08
+# Copyright 1997 Tom Poindexter
+#
+
+SYBTCL_VERSION = 3.0
+DLL_VERSION = 30
+
+PROJECT = sybtcl$(DLL_VERSION)
+
+#
+# Project directories -- these may need to be customized for your site
+#
+# ROOT --       location of the example files.
+# TMPDIR --     location for .obj files.
+# TOOLS32 --    location of VC++ compiler installation.
+# TCL --        location where Tcl is installed.
+# TCLLIB --     define the Tcl lib (with correct version)
+# SYBASE --     location of Sybase include, lib, etc.
+# SYBASE_LIB -- define the Sybase lib
+
+
+ROOT    = .
+TMPDIR  = ..\generic
+
+# point TOOLS32 to your C compiler
+
+TOOLS32 = d:\progra~1\micros~2\VC98
+
+# point TCL and TCLLIB to your tcl distribution
+
+TCL     = d:\progra~1\tcl83
+TCLLIB  = $(TCL)\lib\tclstub83.lib
+
+SYBASE  = d:\sybase
+SYBASE_LIB = $(SYBASE)\lib\libsybdb.lib
+
+# comment the following line to compile with symbols
+NODEBUG=1
+
+#
+# Visual C++ tools
+#
+
+PATH=$(TOOLS32)\bin;$(PATH)
+
+cc32    = $(TOOLS32)\bin\cl -I$(TOOLS32)\include
+CP      = copy
+RM      = del
+
+INCLUDES = -I$(TOOLS32)\include -I$(TCL)\include -I$(SYBASE)\include
+DEFINES = -nologo $(DEBUGDEFINES) -DNO_BCOPY -DUSE_TCL_STUBS
+
+!include <ntwin32.mak>
+
+# 
+# Global makefile settings
+#
+
+DLLOBJS = \
+	$(TMPDIR)\sybtcl.obj
+
+# Targets
+
+all: $(PROJECT).dll
+
+
+$(PROJECT).dll: $(DLLOBJS)
+	$(link) $(linkdebug) $(dlllflags) $(SYBASE_LIB) $(TCLLIB) \
+		$(guilibsdll) -out:$(PROJECT).dll $(DLLOBJS)
+
+# Implicit Targets
+
+.c.obj:
+	$(cc32) $(cdebug) $(cflags) $(cvarsdll) $(INCLUDES) \
+		$(DEFINES) -Fo$(TMPDIR)\ $<
+
+clean:
+	-$(RM) $(TMPDIR)\*.obj
+	-$(RM) $(PROJECT).dll
+	-$(RM) $(PROJECT).lib
+	-$(RM) $(PROJECT).exp
+					      

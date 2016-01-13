@@ -1,0 +1,62 @@
+# syb12text.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+# 
+# exercise various safe interp
+#
+
+# syb11text should have run before this 
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+test sybsafeinterp-1.1 {safeinterp: load package into safe interp} {
+  interp create -safe s
+  load {} Sybtcl s
+} {}
+
+test sybsafeinterp-1.2 {safeinterp: open connection} {
+  global syb_userid syb_pw syb_server syb_db
+  global syb_interp
+  set syb_interp [s eval sybconnect \"$syb_userid\" \"$syb_pw\" \"$syb_server\"]
+  s eval "sybuse $syb_interp $syb_db"
+  set syb_interp
+} {sybtcl1}
+
+test sybsafeinterp-1.3 {safeinterp: sql} {
+  global syb_interp
+  s eval " sybsql $syb_interp {select v_smallint from sybtcl___tests} "
+} {REG_ROW}
+
+test sybsafeinterp-1.4 {safeinterp: fail write to file} {
+  global syb_interp
+  catch {
+    s eval " 
+      sybsql $syb_interp {select v_image from sybtcl___tests 
+             where v_smallint = -1}
+      sybreadtext $syb_interp -file sybtcl.dat
+    " 
+  } res
+  set res
+} {sybreadtext:  cannot write to file in safe interpreter}
+
+test sybsafeinterp-1.5 {safeinterp: fail read from file} {
+  global syb_interp
+  catch {
+    s eval "
+      sybsql $syb_interp {select v_image from sybtcl___tests 
+          where v_smallint = -1}
+      sybwritetext $syb_interp sybtcl___tests.v_image 1 -file sybtcl.dat
+    " 
+  } res
+  set res
+} {sybwritetext:  cannot read from file in safe interpreter}
+
+
+test sybsafeinterp-1.6 {safeinterp: close handle upon delete interp} {
+  global syb_interp
+  interp delete s
+  catch {sybuse sybtcl1} res
+  set res
+} "sybuse: handle sybtcl1 not open "
+
+

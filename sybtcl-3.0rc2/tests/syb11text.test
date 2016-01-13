@@ -1,0 +1,135 @@
+# syb11text.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+# 
+# exercise various sybreadtext and sybwritetext
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+global sybmsg
+set sybmsg(maxtext) 2000000
+
+# create some large text and binary data, 1.3 mb & .65mb
+set large_text "123456789-"
+for {set i 0} {$i <17} {incr i} {
+  append large_text $large_text
+}
+set large_text_size [string length $large_text]
+
+set large_bin  "\x01\x02\x03\x04\x05\x06\x07\x08\x09-"
+for {set i 0} {$i <17} {incr i} {
+  append large_bin $large_bin
+}
+set large_bin_size [string length $large_bin]
+
+# check if 'select into/bulkcopy' has been set
+sybsql $syb_hand "sp_helpdb $syb_db"
+set nolog ""
+sybnext $syb_hand {
+  if {[regexp "select into/bulkcopy" $row]} {
+    set nolog -nolog
+    break
+  }
+} "" row 0
+sybcancel $syb_hand
+if {"$nolog" == ""} {
+  puts "\n\n\nWARNING: 'select into/bulkcopy' db option is not set"
+  puts "          text/image test may cause your log to fill\n\n"
+}
+
+test sybreadtext-1.1 {sybwritetext: insert from var} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "insert into sybtcl___tests (v_smallint, v_bit) 
+		        values (-1,0)"
+  sybsql $syb_hand "update sybtcl___tests set 
+			v_text = NULL , v_image = NULL
+			where v_smallint = -1"
+  sybsql $syb_hand "select v_text from sybtcl___tests 
+			where v_smallint = -1"
+  sybwritetext $syb_hand sybtcl___tests.v_text 1 -variable large_text $nolog
+} "$large_text_size"
+
+test sybreadtext-1.2 {sybreadtext: write to file} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "select v_text from sybtcl___tests 
+			where v_smallint = -1"
+  sybreadtext $syb_hand sybtcl.dat
+} "$large_text_size"
+
+test sybreadtext-1.3 {sybwritetext: insert from -file} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "select v_text from sybtcl___tests 
+			where v_smallint = -1"
+  sybwritetext $syb_hand sybtcl___tests.v_text 1 -file sybtcl.dat $nolog
+} "$large_text_size"
+
+test sybreadtext-1.4 {sybwritetext: insert from file} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "select v_text from sybtcl___tests 
+			where v_smallint = -1"
+  sybwritetext $syb_hand sybtcl___tests.v_text 1 sybtcl.dat $nolog
+} "$large_text_size"
+
+test sybreadtext-1.5 {sybreadtext: write to variable} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "select v_text from sybtcl___tests 
+			where v_smallint = -1"
+  sybreadtext $syb_hand -variable large_text2
+  string compare $large_text $large_text2
+} "0"
+
+
+
+test sybreadtext-1.6 {sybwritetext: insert image from var} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "select v_image from sybtcl___tests 
+			where v_smallint = -1"
+  sybwritetext $syb_hand sybtcl___tests.v_image 1 -variable large_bin $nolog
+} "$large_bin_size"
+
+test sybreadtext-1.7 {sybreadtext: write image to file} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "select v_image from sybtcl___tests 
+			where v_smallint = -1"
+  sybreadtext $syb_hand sybtcl.dat
+} "$large_bin_size"
+
+test sybreadtext-1.8 {sybwritetext: insert from -file} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "select v_image from sybtcl___tests 
+			where v_smallint = -1"
+  sybwritetext $syb_hand sybtcl___tests.v_image 1 -file sybtcl.dat $nolog
+} "$large_bin_size"
+
+test sybreadtext-1.9 {sybwritetext: insert image from file} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "select v_image from sybtcl___tests 
+			where v_smallint = -1"
+  sybwritetext $syb_hand sybtcl___tests.v_image 1 sybtcl.dat $nolog
+} "$large_bin_size"
+
+test sybreadtext-1.10 {sybreadtext: write image to variable} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "select v_image from sybtcl___tests 
+			where v_smallint = -1"
+  sybreadtext $syb_hand -variable large_bin2
+  string compare $large_bin $large_bin2
+} "0"
+
+
+
+test sybreadtext-1.11 {sybreadtext: write image to variable w/ -async} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "select v_text from sybtcl___tests 
+			where v_smallint = -1" -async
+  sybwritetext $syb_hand sybtcl___tests.v_text 1 -variable large_text $nolog
+} "$large_text_size"
+
+test sybreadtext-1.12 {sybreadtext: write to variable w/ -async} {
+  global large_text large_text_size large_bin large_bin_size
+  sybsql $syb_hand "select v_text from sybtcl___tests 
+			where v_smallint = -1" -async
+  sybreadtext $syb_hand -variable large_text2
+  string compare $large_text $large_text2
+} "0"

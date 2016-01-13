@@ -1,0 +1,44 @@
+# sybconnect.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+#
+# exercise sybconnect and sybclose
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+test sybconnect-1.1 {sybconnect: no arguments} {
+  catch {
+    sybconnect 
+  } res
+  set res
+} {wrong # args: sybconnect userid password ?server? ?appname? ?ifile? ?charset? }
+
+test sybconnect-1.2 {sybconnect: all arguments} {
+  global syb_userid syb_pw syb_server env sybmsg
+  catch {
+    set charsets ""
+    foreach c [glob -nocomplain [file join $env(SYBASE) charsets *]] {
+      lappend charsets [file tail $c]
+    }
+    if {[llength $charsets] > 0} {
+      if {[lsearch $charsets iso_1] >= 0} {
+          set charset iso_1
+      } else {
+          set charset [lindex $charsets 0]
+      }
+    } else {
+      set charset {}
+    }
+    set if ""
+    if {[file isfile [file join $env(SYBASE) interfaces]]} {
+      set if [file join $env(SYBASE) interfaces]
+    }
+    sybconnect $syb_userid $syb_pw $syb_server sybtcl_test $if $charset
+  } res
+  catch {sybclose $res}
+  set res
+} {sybtcl1}
+
+
+

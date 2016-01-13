@@ -1,0 +1,79 @@
+Sybtcl
+
+** These versions of samples were released with Sybtcl 2.5, May, 1997.
+
+These are sample Tcl and Wish programs for the Sybtcl package.
+
+To run, you can either specify the script on the tcl or wish command line,
+or if your system supports interpreters (see exec(2)), you can change the
+first line in each file to point to the location of tcl or wish.
+
+* Please examine each sample before you run it for any parameters the script
+* needs, and sybtcl command usage.
+
+
+Descriptions of sample tcl/wish programs
+----------------------------------------
+
+snap_config (tcl)   writes an isql script to stdout of the current Sybase
+		    server configuration.  The resulting isql script can
+		    be run with isql to create the configuration.
+
+free_space  (tcl)   calculates the amount of free space in all databases.
+
+get_blurbs  (tcl)   illustrates use of sybreadtext by retrieving a text
+		    column from the "pubs" database.
+
+wisqlite    (wish)  a windowing version of Sybase's isql command.  Good
+		    enough to pay for!  Shows off sybcols usage to support
+		    ad hoc queries.  I developed wisql as I was testing
+		    sybtcl, then went back to pretty it up some.
+		    The file pubs.sql is a sample sql script that can be
+		    run on the "pubs" sample database.  Notice there are no
+		    "go" statements.
+
+risqlite    (wish)  a windowing version of Redbrick's risql command.  
+		    Redbrick (up to and including version 5.0.12) includes
+		    a Sybase Open Server interface.  risqlite has been
+		    adapted from wisqlite to use this interface.  Note:
+		    Rebrick states that ODBC will be the only connection
+		    option in the future, and the Sybase Open Server interface
+		    will be discontinued.  risqlite will need to be converted,
+		    and probably won't be appropraite for Sybtcl after 
+		    Redbrick drops support.
+
+pubs_pix    (wishx) add/update images to the "pubs" database and allow
+		    viewing via user defined x viewer.  demonstrates
+		    sybwritetext and sybreadtext.
+		    A default viewer is suggested based on image type; I
+		    use PBMPLUS & xloadimage.
+		    I had trouble reading the PICT and TIF images stored
+		    in au_pix.  
+
+sybmon      (wish)  a Sybase server CPU & IO monitor.  Written by 
+		    Paul Courbis.  blue for cpu, red for disk i/o.
+		    Shift-Button1 to change colors, update interval.
+
+sp_who      (wish)  a Sybase graphical sp_who.  Written by 
+		    Paul Courbis.  'sa' login enables "kill" button.
+
+sign_on.tcl (wish)  a sybase sign on window, used by sybmon & sp_who, adapted
+		    from wisqlite
+
+uco/wisql   (wish)  a version of my wisql written by De Clark.
+                    Adds "EZrpt" for reporting, and "EZedit" to change rows.
+                    Contact de@ucolick.org for info/comments.
+		    ** As of Sybtcl 2.5, I'm no longer distributing uco/wisql
+			Please go to:
+        		http://www.ucolick.org/~de/
+        		http://www.ucolick.org/cgi-bin/Tcl/wisql.cgi
+        		ftp://ftp.ucolick.org/pub/src/UCODB
+
+			Check it out!!
+
+
+
+
+Tom Poindexter
+tpoindex@nyx.net
+

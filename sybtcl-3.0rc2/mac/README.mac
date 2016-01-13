@@ -1,0 +1,173 @@
+Sybtcl for Macintosh
+
+BEFORE YOU BEGIN
+
+Sybtcl has been ported to Macintosh, PowerPC only.  
+It has been tested with the latest version of Tcl, 8.0.5.  
+
+You must also have a working Sybase client installation on your machine,
+as Sybtcl uses Sybase shared libraries.  You must have Sybase Open Client
+10.0.4 (or higher) installed on your machine.
+
+Sybtcl is compiled with Apple's MPW.  Only a PowerPC version has
+been compiled and tested.  It might be possible to compile a 68k version,
+I just haven't tried.  Let me know if you make a 68k version, and send me
+any makefile or code patches.
+
+
+You can get Apple MPW for *free* at:
+http://www.apple.com/developer
+http://developer.apple.com/sdk/index.html
+
+the two specific files to get you going are:
+ftp://ftp.apple.com/developer/Utilities/Disk_Copy_6.3.sit.hqx
+ftp://ftp.apple.com/developer/Tool_Chest/Core_Mac_OS_Tools/MPW_etc./MPW-GM_Images/MPW.img.bin
+
+
+IMPORTANT NOTES:
+
+I have found that Sybase's libraries are more fragile on Macintosh for
+certain operations.  Most notably is dbpoll().  Too many dbpoll() calls
+seem to confuse the Sybase libraries.  There are a few code changes
+for Macintosh to help work around this problem.  First, less Tcl events
+are serviced during asynchronous operations.  dbpoll() is used to check
+when Sybase data is available.  But if the user also has used 'sybpoll'
+to check for input, the dbprocess becomes unusable.  Second, whenever
+a handle is closed, either by 'sybclose' or exiting the intepreter, one
+extra 'dummy' SQL command is sent to the server just before closing the
+server connection ('select 1').  This is done to help prevent dbclose() from 
+hanging indefinitely after using 'sybevent'.
+
+If you run the test suite, some tests are likely to fail, especially those
+involving servicing Tcl events during Sybtcl processing (e.g., when 
+you have set sybmsg(bgevents) to 'all'.)
+
+Also, programmers should refrain from executing 'sybpoll' on a handle that
+has already been polled and returned data ready.
+
+
+INSTALLING SYBTCL FOR MACINTOSH
+
+Easy install:
+ 
+I've written a tiny install script.  It figures out which shared
+library to install based on your Tcl version, copies that file to your
+Tcl library, makes a pkgIndex.tcl and installs it into a project directory.
+First, copy all files in this directory to some directory on your Mac
+e.g., new folder called 'sybtcl30'.
+
+To install, copy ALL of the files in the Sybtcl ./mac directory to your Mac. 
+You'll need StuffIt, or some similar tool to unpack the .shlb.hqx BinHex files.
+Some FTP clients, such as Fetch, can also decode BinHex files.
+
+Simply run the install.tcl file with your tclsh:
+ 
+	Start 'Tcl Shell 8.0.5'  (or appropriate version, from your Tcl install)
+	  cd to_your_sybtcl_mac_directory
+	  source install.tcl
+        answer 'yes' when prompted.
+
+
+Manual installation instructions:
+
+1.  Install Sybase Open Client for Macintosh.  Make sure you can run
+    sybping and isql to connect to your databases.
+    Sybtcl depends on libsybdb, so this must be installed, usually in 
+    your Mac "System Folder:Extensions" directory.  
+    You should also have run the SybConfig control panel to set your
+    Sybase directory and interface file location.
+    Sybtcl requires Sybase Open Client 10.0.4 or higer.
+
+2.  Copy the sybtcl30.shlb to your Tcl .\lib directory.  
+    
+    You should copy and rename the sybtcl shared library to the
+    same directory as your Tcl library.  Rename the shared lib
+    to sybtcl30.shlb.
+
+    With 'Tcl Shell':
+      set dir [file dirname [info library]]
+      file copy sybtcl3080.shlb  [file join $dir sybtcl30.shlb]
+
+
+3.  Copy or add pkgIndex.tcl to your Tcl lib directory.  This is so
+    the 'package unknown' scripts can resolve the 'package ifneeded' to
+    load the shared library.  
+    
+    The 'install.tcl' script makes a directory adjacent to your Tcl lib
+    called 'sybtcl30', and creates the pkgIndex.tcl there.
+
+    With 'Tcl Shell':
+      set dir [file dirname [info library]]
+      file mkdir [file join $dir sybtcl30]
+      file copy pkgIndex.tcl [file join $dir sybtcl30]
+
+4.  Try it out!
+
+    With 'Tcl Shell'
+      % package require Sybtcl
+      3.0 
+      % set h [sybconnect id password SERVER]
+      sybtcl0
+      % sybsql $h .....whatever....
+
+    If you get errors:
+
+    If 'package require' says it can't find package Sybtcl:
+	    -make sure you've installed the pkgIndex.tcl.
+	    -or just load the sybtcl30.shlb manually
+		    % load "sybtcl30.shlb"
+		    (or wherever you put it)
+    If 'sybconnect' complains about resolving symbols:
+	    -make sure you have the Sybase Open Client libraries installed
+
+    If 'sybconnect' fails in dbopen(), then you have a bad id, password,
+    or server definition.  Make sure you can connect to your database using
+    isql. 
+
+
+
+RUNNING TESTS
+
+You can run the Sybtcl tests manually:
+
+	Start 'Tcl Shell 8.0.5'   (or appropriate version)
+	  cd to_your_sybtcl_tests_directory
+	  source all
+
+	You will need to enter the location of your Sybase installation,
+	which is probably something like: <your_disk_name>:Sybase.
+	You will also need to enter a vaild Sybase id, password, server,
+	and database that you have permission to create tables and 
+	stored procedures.
+
+Note:   some tests are likely to fail, especially those involved with
+	event processing or servicing Tcl events.
+
+
+
+BUILDING SYBTCL FOR MACINTOSH
+
+My development environment is:
+	MacOS 8.1
+	Apple MPW 3.4.2
+	Tcl 8.0.5 for Macintosh
+	Sybase Open Client for Macintosh 10.0.4 (with PowerPC libs)
+
+1.  Get and unpack the Tcl 8.0.5 (or higher) source distribution.  
+    Sybtcl needs the include files shipped with the source distribution.
+
+2.  Modify the makefile as needed.  You'll probably have to change the
+    values for the defines to suit.
+    The compiler will need to find your Sybase include files, and the
+    linker will need to find the libsybdb file, as well as the
+    Tcl include and lib files.
+
+3.  Make it!  
+
+	With 'MPW'
+	  Build->Build...  'sybtcl'
+
+4.  Install it as noted above.
+
+
+

@@ -1,0 +1,58 @@
+# syb08cols.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+# 
+# exercise various sybcols
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+set sybcol_sql { select v_tinyint, v_smallint, v_int, v_double, v_real, v_smallmoney, v_money, v_smalldatetime, v_datetime, v_char_10, v_varchar_255, v_text, v_binary_10, v_varbinary_255, v_image, v_bit }
+
+if {$have_sys10types} {
+
+append sybcol_sql {, v_decimal_38_20, v_numeric_38_0 }
+set col_result [list v_tinyint v_smallint v_int v_double v_real v_smallmoney v_money v_smalldatetime v_datetime v_char_10 v_varchar_255 v_text v_binary_10 v_varbinary_255 v_image v_bit v_decimal_38_20 v_numeric_38_0]
+set len_result [list 1 2 4 8 4 4 8 4 8 10 255 32768 10 255 32768 1 35 35]
+set type_result [list tinyint smallint int float real smallmoney money smalldatetime datetime char char text binary binary image bit decimal numeric]
+
+} else {
+
+set col_result [list v_tinyint v_smallint v_int v_double v_real v_smallmoney v_money v_smalldatetime v_datetime v_char_10 v_varchar_255 v_text v_binary_10 v_varbinary_255 v_image v_bit]
+set len_result [list 1 2 4 8 4 4 8 4 8 10 255 32768 10 255 32768 1]
+set type_result [list tinyint smallint int float real smallmoney money smalldatetime datetime char char text binary binary image bit]
+}
+  append sybcol_sql { from sybtcl___tests }
+
+
+test sybcols-1.1 {sybcols: all column names after sql} {
+  global sybcol_sql col_result len_result type_result
+  sybsql $syb_hand $sybcol_sql
+  set cols [sybcols $syb_hand]
+  expr {([string compare $cols $col_result] == 0) +
+        ([string compare $sybmsg(collengths) $len_result] == 0) +
+        ([string compare $sybmsg(coltypes) $type_result] == 0)}
+} {3}
+
+test sybcols-1.2 {sybcols: all column names after one fetch} {
+  global sybcol_sql col_result len_result type_result
+  sybsql $syb_hand $sybcol_sql
+  set row [sybnext $syb_hand]
+  set cols [sybcols $syb_hand]
+  expr {([string compare $cols $col_result] == 0) +
+        ([string compare $sybmsg(collengths) $len_result] == 0) +
+        ([string compare $sybmsg(coltypes) $type_result] == 0)}
+} {3}
+
+test sybcols-1.3 {sybcols: all column names after all fetch} {
+  global sybcol_sql col_result len_result type_result
+  sybsql $syb_hand $sybcol_sql
+  sybnext $syb_hand {}
+  set cols [sybcols $syb_hand]
+  expr {([string compare $cols $col_result] == 0) +
+        ([string compare $sybmsg(collengths) $len_result] == 0) +
+        ([string compare $sybmsg(coltypes) $type_result] == 0)}
+} {3}
+
+
+

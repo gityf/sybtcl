@@ -1,0 +1,108 @@
+# syb13event.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+# 
+# exercise various combinations of sybsql -async and sybevent
+#	and sybmsg(bgevents)
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+set rowCount 0
+set stopEvents ""
+set tickCount 0
+
+proc countRows {hand} {
+   global sybmsg
+   global rowCount stopEvents
+   set row [sybnext $hand]
+   if {$sybmsg(nextrow) == "REG_ROW"} {
+     incr rowCount
+   } elseif {$sybmsg(nextrow) == "NO_MORE_RESULTS"} {
+     set stopEvents by_event_handler
+   }
+}
+
+test sybevent-1.1 {sybevent: async with event handler } {
+  update
+  global sybmsg syb_hand
+  global rowCount stopEvents
+  set rowCount 0
+  set stopEvents ""
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint >=0" -async
+  set stopID [after 10000 {set stopEvents by_watchdog}]
+  sybevent $syb_hand "countRows $syb_hand"
+  vwait stopEvents
+  after cancel $stopID
+  format "$rowCount $stopEvents $sybmsg(nextrow)"
+} {30 by_event_handler NO_MORE_RESULTS}
+
+
+test sybevent-1.2 {sybevent: sql delay async with event handler} {
+  update
+  global sybmsg syb_hand
+  global rowCount stopEvents
+  set rowCount 0
+  set stopEvents ""
+  set stopID [after 10000 "set stopEvents by_watchdog"]
+  sybsql $syb_hand "waitfor delay '00:00:05' select * from sybtcl___tests where v_smallint >=0" -async
+  sybevent $syb_hand "countRows $syb_hand"
+  vwait stopEvents
+  after cancel $stopID
+  format "$rowCount $stopEvents $sybmsg(nextrow)"
+} {30 by_event_handler NO_MORE_RESULTS}
+
+test sybevent-1.3 {sybevent: bgevents=all  sybnext /w commands} {
+  update
+  global sybmsg syb_hand
+  global rowCount tickCount 
+  set sybmsg(bgevents) all
+  set rowCount 0
+  set tickCount 0
+  after 1000 "incr tickCount"
+  after 2000 "incr tickCount"
+  after 3000 "incr tickCount"
+  sybsql $syb_hand "waitfor delay '00:00:05' select * from sybtcl___tests where v_smallint >=0" 
+  sybnext $syb_hand {incr rowCount}
+  set result "$tickCount $rowCount $sybmsg(nextrow)"
+  update
+  format $result
+} {3 30 NO_MORE_ROWS}
+
+test sybevent-1.4 {sybevent: bgevents=all  -async sybnext /w commands} {
+  update
+  global sybmsg syb_hand
+  global rowCount tickCount 
+  set sybmsg(bgevents) all
+  set rowCount 0
+  set tickCount 0
+  after 1000 "incr tickCount"
+  after 2000 "incr tickCount"
+  after 3000 "incr tickCount"
+  sybsql $syb_hand "waitfor delay '00:00:05' select * from sybtcl___tests where v_smallint >=0" -async
+  sybnext $syb_hand {incr rowCount}  ;# process 'waitfor'
+  sybnext $syb_hand {incr rowCount}
+  set result "$tickCount $rowCount $sybmsg(nextrow)"
+  update
+  format $result
+} {3 30 NO_MORE_ROWS}
+
+test sybevent-1.5 {sybevent: don't process events in sybnext /w commands bgevents} {
+  update
+  global sybmsg syb_hand
+  global rowCount  tickCount
+  set sybmsg(bgevents) none
+  set rowCount 0
+  set tickCount 0
+  after 1000 "incr tickCount"
+  after 2000 "incr tickCount"
+  after 3000 "incr tickCount"
+  sybsql $syb_hand "waitfor delay '00:00:05' select * from sybtcl___tests where v_smallint >=0" 
+  sybnext $syb_hand {incr rowCount}
+  set ticks $tickCount
+  after 4000
+  update 
+  format "$ticks $tickCount $rowCount $sybmsg(nextrow)"
+} {0 3 30 NO_MORE_ROWS}
+
+

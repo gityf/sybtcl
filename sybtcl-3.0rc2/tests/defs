@@ -1,0 +1,506 @@
+# sybtcl test 
+# hacked from tcl test suite
+
+# This file contains support code for the Tcl test suite.  It is
+# normally sourced by the individual files in the test suite before
+# they run their tests.  This improved approach to testing was designed
+# and initially implemented by Mary Ann May-Pumphrey of Sun Microsystems.
+#
+# Copyright (c) 1990-1994 The Regents of the University of California.
+# Copyright (c) 1994-1996 Sun Microsystems, Inc.
+#
+# See the file "license.terms" for information on usage and redistribution
+# of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+# SCCS: @(#) defs 1.60 97/08/13 18:10:19
+
+#set VERBOSE 1
+
+if ![info exists VERBOSE] {
+    set VERBOSE 0
+}
+if ![info exists TESTS] {
+    set TESTS {}
+}
+
+if {"$tcl_platform(platform)" == "macintosh"} {
+  rename exit tcl_exit
+  proc exit {args} {
+    puts "press any key to exit"
+        flush stdout
+        gets stdin
+        tcl_exit
+  }
+}
+
+puts "Sybtcl test suite"
+
+# see if executable has sybtcl commands, otherwise try to load library
+if {[llength [info commands sybconnect]] == 0} {
+    set so [info sharedlibextension]
+    switch -- $tcl_platform(platform) {
+	unix {
+	    set file [lindex [glob -nocomplain ../unix/libSybtcl*$so] 0]
+	}
+	windows {
+	    set file [lindex [glob -nocomplain ../win/sybtcl*dll] 0]
+	}
+	macintosh {
+	    set file [lindex [glob -nocomplain ../mac/sybtcl*shlb] 0]
+	}
+	default {
+	    set file {}
+	}
+    }
+    if {[string length $file] > 0 && [file isfile $file]} {
+	if {[catch {load $file Sybtcl}] != 0} {
+	    puts "can't load sybtcl library"
+	    exit
+	}
+    } else {
+	puts "can't find a suitable sybtcl library to load"
+	exit
+    }
+    set Sybtcl_static 0
+} else {
+    set Sybtcl_static 1
+}
+
+# check for SYBASE env var
+if {![info exists env(SYBASE)]} {
+    puts "SYBASE environment variable not defined"
+    puts "please enter the full pathname of your Sybase installation"
+    gets stdin env(SYBASE)
+}
+puts "using $env(SYBASE) as sybase environment"
+
+if {[info exists env(DSQUERY)]} {
+  set def_server $env(DSQUERY)
+} else {
+  set def_server <none>
+}
+
+# prompt for sybase user id, password, server, and dbname
+puts -nonewline "please enter your sybase id: " ; flush stdout
+gets stdin syb_userid
+puts -nonewline "please enter your sybase password: " ; flush stdout
+gets stdin syb_pw
+puts -nonewline "please enter your sybase server name (default=$def_server): " ; flush stdout
+gets stdin syb_server
+puts -nonewline "please enter your sybase database name (default=tempdb): " ; flush stdout
+gets stdin syb_db
+
+if {[string length $syb_server] == 0} {
+    set syb_server $def_server
+}
+
+puts -nonewline "testing connection...." ; flush stdout
+if { [catch {set syb_hand [sybconnect $syb_userid $syb_pw $syb_server]}] != 0} {
+    puts "oops\ncan't logon to sybase server $syb_server"
+    exit
+} else {
+    puts "ok"
+    if {[string length $syb_db] == 0} {
+	set syb_db tempdb
+    }
+    if {[catch {sybuse $syb_hand $syb_db}] != 0} {
+	sybclose $syb_hand
+	puts "can't use database $syb_db in server $syb_server"
+	exit
+    }
+}
+puts "using database [sybuse $syb_hand] in $syb_server" ; flush stdout
+if {[string match *system10* $sybmsg(dblibinfo)] } {
+    set have_sys10types 1
+    puts "sybtcl compiled with system 10 libraries, will test numeric and decimal types"
+} else {
+    set have_sys10types 0
+    puts "sybtcl compiled without system 10 libraries, will skip numeric and decimal types"
+}
+flush stdout
+
+proc truncate_table {} {
+    global syb_hand
+    sybsql $syb_hand {truncate table sybtcl___tests}
+    sybsql $syb_hand {truncate table sybtcl___testnext}
+}
+
+proc drop_table {} {
+    global syb_hand
+    catch {sybsql $syb_hand "drop procedure sybtcl___test1"}
+    catch {sybsql $syb_hand "drop procedure sybtcl___test2"}
+    catch {sybsql $syb_hand "drop table sybtcl___tests"}
+    catch {sybsql $syb_hand "drop table sybtcl___testnext"}
+}
+
+
+set table_exists 0
+if {[catch {
+  sybsql $syb_hand "sp_help sybtcl___tests"
+  sybnext $syb_hand {
+    if {"$col1" == "sybtcl___tests" && [string trim $col3] == "user table"} {
+        set table_exists 1
+    }
+  } {} col1 1 col3 3
+
+}]} {
+  puts "sybsql failed: $sybmsg(dberrstr)\n$sybmsg(msgtext)"
+  exit
+
+}
+
+if {$table_exists} {
+    puts "sybtcl___tests exists,"
+    puts -nonewline "  do you want to drop and re-create it (yes/no, default=no): "
+    flush stdout
+    gets stdin res
+    if {[string match $res yes]} {
+	drop_table
+    } else {
+        exit
+    }
+}
+
+
+puts "creating test table sybtcl___tests & procedure sybtcl___test1" 
+flush stdout
+
+proc create_table {} {
+    global syb_hand
+    global sybmsg
+    global have_sys10types
+    set res [catch {
+	sybsql $syb_hand [subst {
+	    create table sybtcl___tests (
+		v_tinyint       tinyint null,
+		v_smallint      smallint null,
+		v_int           int null,
+		v_double        double precision null,
+		v_real          real null,
+		v_smallmoney    smallmoney null,
+		v_money         money null,
+		v_smalldatetime smalldatetime null,
+		v_datetime      datetime null,
+		v_char_10       char(10) null,
+		v_varchar_255   varchar(255) null,
+		v_text          text null,
+		v_binary_10     binary(10) null,
+		v_varbinary_255 varbinary(255) null,
+		v_image         image null,
+		v_bit           bit 
+		[expr {$have_sys10types ? 
+		   ",v_decimal_38_20 decimal(38,20) null, \
+		     v_numeric_38_0  numeric(38,0) null"  \
+		   : ""}]
+	    )
+	}]
+    } reason ]
+
+    if {$res != 0} {
+	sybclose $syb_hand
+	puts "can't create table sybtcl___tests"
+	puts "$reason:\n$sybmsg(msgtext)"
+	exit
+    }
+
+    sybsql $syb_hand {
+        create table sybtcl___testnext (v_int int not null)
+    }
+
+    sybsql $syb_hand {
+        create procedure sybtcl___test1 (
+	    @x int, 
+	    @y int, 
+	    @res int output
+        )
+        as
+        begin
+	    select v_smallint, v_varchar_255 from sybtcl___tests
+	    select @res = @x * @y
+	    select @res
+	    print 'sybtcl___test1 got %1!', @res
+	    select @x = @x + @y
+	    return @x 
+        end
+    }
+}
+
+create_table
+
+proc insert_data {} {
+    global syb_hand
+    global have_sys10types
+    set ins_sql {
+      insert into sybtcl___tests (
+		v_tinyint,
+		v_smallint,
+		v_int,
+		v_double,
+		v_real,
+		v_smallmoney,
+		v_money,
+		v_smalldatetime,
+		v_datetime,
+		v_char_10,
+		v_varchar_255,
+		v_text,
+		v_binary_10,
+		v_varbinary_255,
+		v_image,
+		v_bit
+		[expr {$have_sys10types ?  
+		    ",v_decimal_38_20, \
+		      v_numeric_38_0  " \
+		     : ""}]
+      ) values (
+		$cnt,
+		$cnt,
+		$cnt,
+		$cnt,
+		$cnt,
+		$cnt,
+		$cnt,
+		getdate(),
+		getdate(),
+		'$cnt x',
+		'$cnt 1234567890',
+		'$cnt 1234567890',
+		'$cnt 1234567890',
+		'$cnt 1234567890',
+		'$cnt 1234567890',
+		[expr $cnt % 2]
+		[expr {$have_sys10types ? ", ${cnt}.0, ${cnt}.0" : ""}]
+      )
+    } 
+
+    puts -nonewline "creating 30 initial rows in sybtcl___tests"
+    flush stdout
+    for {set cnt 0} {$cnt < 30} {incr cnt} {
+        sybsql $syb_hand [subst $ins_sql]
+        puts -nonewline "." ; flush stdout
+    }
+
+    # Insert 300 rows into the testnext table in batches of 20.
+    set nPerBatch 20
+    set desiredTot 300
+    set curTot 0
+    set sql {}
+    for {set i 0} {$i < $nPerBatch} {incr i} {
+        append sql "insert into sybtcl___testnext(v_int) values(2)\n"
+    }
+    puts -nonewline "\ncreating 300 initial rows in sybtcl___testnext"
+    flush stdout
+    while {$curTot < $desiredTot} {
+        sybsql $syb_hand $sql
+        sybnext $syb_hand { }
+        incr curTot $nPerBatch
+        puts -nonewline ".$curTot"
+        flush stdout
+    }
+
+    puts "\ndone." ; flush stdout
+
+}
+
+insert_data
+
+
+
+
+set user {}
+catch (unset testConfig}
+set testConfig(junk) ""
+unset testConfig(junk)
+
+trace variable testConfig r safeFetch
+
+proc safeFetch {n1 n2 op} {
+    global testConfig 
+
+    if {($n2 != {}) && ([info exists testConfig($n2)] == 0)} {
+	set testConfig($n2) 0
+    }
+}
+
+
+proc print_verbose {name description constraints script code answer} {
+    puts stdout "\n"
+    if {[string length $constraints]} {
+	puts stdout "==== $name $description\t--- ($constraints) ---"
+    } else {
+	puts stdout "==== $name $description"
+    }
+    puts stdout "==== Contents of test case:"
+    puts stdout "$script"
+    if {$code != 0} {
+	if {$code == 1} {
+	    puts stdout "==== Test generated error:"
+	    puts stdout $answer
+	} elseif {$code == 2} {
+	    puts stdout "==== Test generated return exception;  result was:"
+	    puts stdout $answer
+	} elseif {$code == 3} {
+	    puts stdout "==== Test generated break exception"
+	} elseif {$code == 4} {
+	    puts stdout "==== Test generated continue exception"
+	} else {
+	    puts stdout "==== Test generated exception $code;  message was:"
+	    puts stdout $answer
+	}
+    } else {
+	puts stdout "==== Result was:"
+	puts stdout "$answer"
+    }
+}
+
+# test --
+# This procedure runs a test and prints an error message if the
+# test fails.  If VERBOSE has been set, it also prints a message
+# even if the test succeeds.  The test will be skipped if it
+# doesn't match the TESTS variable, or if one of the elements
+# of "constraints" turns out not to be true.
+#
+# Arguments:
+# name -		Name of test, in the form foo-1.2.
+# description -		Short textual description of the test, to
+#			help humans understand what it does.
+# constraints -		A list of one or more keywords, each of
+#			which must be the name of an element in
+#			the array "testConfig".  If any of these
+#			elements is zero, the test is skipped.
+#			This argument may be omitted.
+# script -		Script to run to carry out the test.  It must
+#			return a result that can be checked for
+#			correctness.
+# answer -		Expected result from script.
+
+proc test {name description script answer args} {
+    global VERBOSE TESTS testConfig
+    if {[string compare $TESTS ""] != 0} then {
+	set ok 0
+	foreach test $TESTS {
+	    if [string match $test $name] then {
+		set ok 1
+		break
+	    }
+        }
+	if !$ok then return
+    }
+    set i [llength $args]
+    if {$i == 0} {
+	set constraints {}
+    } elseif {$i == 1} {
+	# "constraints" argument exists;  shuffle arguments down, then
+	# make sure that the constraints are satisfied.
+
+	set constraints $script
+	set script $answer
+	set answer [lindex $args 0]
+	set doTest 0
+	if {[string match {*[$\[]*} $constraints] != 0} {
+	    # full expression, e.g. {$foo > [info tclversion]}
+
+	    catch {set doTest [uplevel #0 expr [list $constraints]]} msg
+	} elseif {[regexp {[^.a-zA-Z0-9 ]+} $constraints] != 0} {
+	    # something like {a || b} should be turned into 
+	    # $testConfig(a) || $testConfig(b).
+
+ 	    regsub -all {[.a-zA-Z0-9]+} $constraints {$testConfig(&)} c
+	    catch {set doTest [eval expr $c]}
+	} else {
+	    # just simple constraints such as {unixOnly fonts}.
+
+	    set doTest 1
+	    foreach constraint $constraints {
+		if {![info exists testConfig($constraint)]
+			|| !$testConfig($constraint)} {
+		    set doTest 0
+		    break
+		}
+	    }
+	}
+	if {$doTest == 0} {
+	    if $VERBOSE then {
+		puts stdout "++++ $name SKIPPED: $constraints"
+	    }
+	    return	
+	}
+    } else {
+	error "wrong # args: must be \"test name description ?constraints? script answer\""
+    }
+    
+    set code [catch {uplevel $script} result]
+    if {$code != 0} {
+	print_verbose $name $description $constraints $script \
+		$code $result
+    } elseif {[string compare $result $answer] == 0} then { 
+	if $VERBOSE then {
+	    if {$VERBOSE > 0} {
+		print_verbose $name $description $constraints $script \
+		    $code $result
+	    }
+	    if {$VERBOSE != -2} {
+		puts stdout "++++ $name PASSED"
+	    }
+	}
+    } else { 
+	print_verbose $name $description $constraints $script \
+		$code $result
+	puts stdout "---- Result should have been:"
+	puts stdout "$answer"
+	puts stdout "---- $name FAILED" 
+    }
+}
+
+proc dotests {file args} {
+    global TESTS
+    set savedTests $TESTS
+    set TESTS $args
+    source $file
+    set TESTS $savedTests
+}
+
+proc normalizeMsg {msg} {
+    regsub "\n$" [string tolower $msg] "" msg
+    regsub -all "\n\n" $msg "\n" msg
+    regsub -all "\n\}" $msg "\}" msg
+    return $msg
+}
+
+proc makeFile {contents name} {
+    set fd [open $name w]
+    fconfigure $fd -translation lf
+    if {[string index $contents [expr [string length $contents] - 1]] == "\n"} {
+	puts -nonewline $fd $contents
+    } else {
+	puts $fd $contents
+    }
+    close $fd
+}
+
+proc removeFile {name} {
+    file delete $name
+}
+
+proc makeDirectory {name} {
+    file mkdir $name
+}
+
+proc removeDirectory {name} {
+    file delete -force $name
+}
+
+proc viewFile {name} {
+    global tcl_platform testConfig
+    if {($tcl_platform(platform) == "macintosh") || \
+		($testConfig(unixExecs) == 0)} {
+	set f [open $name]
+	set data [read -nonewline $f]
+	close $f
+	return $data
+    } else {
+	exec cat $name
+    }
+}
+
+

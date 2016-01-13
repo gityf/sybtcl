@@ -1,0 +1,34 @@
+# syb02use.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+#
+# exercise sybuse
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+test sybuse-1.1 {sybuse: no arguments} {
+  sybcancel $syb_hand
+  set res [sybuse $syb_hand]
+  string compare $res $syb_db
+} {0}
+
+test sybuse-1.2 {sybuse: change database} {
+  sybcancel $syb_hand
+  catch {
+    sybuse $syb_hand master
+  } res
+  sybuse $syb_hand $syb_db
+  set res
+} {master}
+
+test sybuse-1.3 {sybuse: change to non-existent database} {
+  sybcancel $syb_hand
+  catch {
+    sybuse $syb_hand you_should_not_have_this_db
+  } res
+  sybuse $syb_hand $syb_db
+  set res
+} {sybuse: database cannot be used}
+
+

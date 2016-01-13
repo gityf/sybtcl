@@ -1,0 +1,186 @@
+SYBTCL-CAPI
+
+Copyright Tom Poindexter 1995
+
+Sybtcl-capi is a C API to Sybtcl.  Tcl is not required (nor supported!)
+to access Sybtcl functionality from C.  Sybtcl-capi follows the same
+model as Sybtcl in that database results are returned as string values.
+
+Sybtcl-capi consist of two include files "sybtcl-capi.h" ,"tcl.h" and a set of 
+support routines "sybtcl-capi.c".  These provide sybtcl.c enough emulated Tcl 
+functionality so that no changes are required in sybtcl.c.  
+
+***NOTE***
+Sybtcl-capi uses sybtcl26.c from version 2.5, as sybtcl-capi was written to
+emulate Tcl 7.6 call interface.  Beginning with Sybtcl-3.0, sybtcl.c only
+supports Tcl 8.0 object interface.
+
+To build the test program,  review and edit the
+Makefile if necessary, then 'make'.
+
+To run the test program: 
+
+	testcapi sybuid sybpwd 'select * from sometable'
+
+Of course, you should give it your own sybase userid, password, and whatever
+SQL command you would like to execute.
+
+
+
+THE SYBTCL C API
+
+Except as noted, Sybtcl-capi routines return TCL_OK (0) on success, or
+TCL_ERROR (1) on failure.  A fake Tcl_Interp pointer is required for all
+functions, so you should get a new Tcl_Interp first by calling Sybtcl_MkInterp.
+Then call Sybtcl_Init() using your new interp.  
+
+Except for interp, all function agruments should be character strings. 
+For function agruments listed as optional, NULL should be coded instead of "".
+
+See the Sybtcl man page for definitive information on behavior of each
+function.
+
+
+Tcl_Interp * Sybtcl_MkInterp(void);
+
+	Sybtcl_MkInterp returns a pointer to a new Tcl_Interp structure.
+	Interp structure can be used for more than one connection, or
+	you can use a separate interp per connection.
+
+
+void Sybtcl_FreeInterp(Tcl_Interp *interp);
+
+	Sybtcl_FreeInterp frees up memory allocated for the interp
+	structure.
+
+
+int Sybtcl_Init (Tcl_Interp *interp);
+
+	Sybtcl_Init initializes the Sybtcl package for the interp.
+	Call this before any Sybtcl command below.
+
+
+int Sybconnect (Tcl_Interp *interp, char *uid, char *pw, char *server, 
+		char *app, char *ifile);
+	
+	Sybconnect opens a connection to the server.  Uid and pw are
+	required; server, app, and ifile may be NULL.  The connection
+	handle is returned in RESULT(interp).
+
+
+int Sybuse (Tcl_Interp *interp, char *handle, char *db);
+
+	Sybuse switches to the datbase in db, and/or reports the current
+	database in use as RESULT(interp).  Db is optionally NULL.
+
+
+int Sybsql (Tcl_Interp *interp, char *handle, char *sql, 
+		char *async);
+
+	Sybsql sends an SQL statement to the server, optional async should
+	contain "async" to cause SQL to execute asynchronously.
+	Results are in GET_STATUS(interp,Nextrow).
+
+
+int Sybpoll (Tcl_Interp *interp, char *handle, char *timeout, char *all);
+
+	Sybpoll checks on the status of an asynchronous SQL execution.
+	Timeout and all are optionally NULL, if coded, timeout should be
+	a millisecond timeout value, all should be "all" .
+	Number of handles with results ready are in NUMCOLS(interp),
+	handle names are in COLUMN(interp,i).
+
+
+int Sybnext (Tcl_Interp *interp, char *handle);
+
+	Sybnext gets the next row,  NUMCOLS(interp) as the number of
+	columns; each column should be accessed as COLUMN(interp,i), where
+	i = 0 for column 1, etc.  Type of row returned in 
+	GET_STATUS(interp,Nextrow).
+
+
+int Sybcols (Tcl_Interp *interp, char *handle);
+
+	Sybcols gets the column names,  NUMCOLS(interp) as the number of
+	columns; each column name should be accessed as COLUMN(interp,i), where
+	i = 0 for column name 1, etc.  List of column data types are in
+	GET_STATUS(interp,Coltypes), list of column lengths in
+	GET_STATUS(interp,Collengths).
+
+
+int Sybcancel (Tcl_Interp *interp, char *handle);
+
+	Sybcanel cancels the pending set of results;
+
+
+int Sybretval (Tcl_Interp *interp, char *handle);
+
+	Sybretval gets the return value from a stored procedure, if any,
+	in RESULT(interp).
+
+
+int Sybwritetext (Tcl_Interp *interp, char *handle, 
+		char *object, char *colnum, char *file, char *nolog);
+
+	Sybwritetext writes a file to a text/image column,  nolog is 
+	optionally "nolog".
+
+
+int Sybreadtext (Tcl_Interp *interp, char *handle, char *file);
+
+	Sybreadtext reads a text/image column and writes contents to a file.
+
+
+int Sybclose (Tcl_Interp *interp, char *handle);
+
+	Sybclose closes a connection.
+
+
+Macros:
+
+These macros are the safe way to access results, as they ensure a 
+valid string is returned.
+
+RESULT(interp)		Gets a single result, interp->column[0]
+COLUMN(interp,i)	Gets a column result, interp->colunn[i]
+NUMCOLS(interp)		Gets number of result columns, interp->num_columns
+GET_STATUS(interp,i)	Gets a status value, interp->status[i]
+
+Defines for status values:
+
+	Msgno 
+	Msgtext
+	Severity
+	Svrname 
+	Procname
+	Line   
+	Dberr 
+	Oserr
+	Dberrstr
+	Oserrstr
+	Nextrow
+	Retstatus
+	Collengths 
+	Coltypes  
+	Handle   
+	Nullvalue		"nullvalue" for use in Tcl_SetVar2()
+	Floatprec		"floatprec"  "   "   "   "    "
+	Maxtext 		"maxtext"    "   "   "   "    "
+	Dateformat		"dateformat" "   "   "   "    "
+	Fixedchar 		"fixedchar   " "   "   "   "    "
+	Version
+
+
+Again, see the sybtcl.man page for definitions of each value.
+
+To set a programmer status value (Nullvalue, Floatprec, Maxtext, Dateformat):
+Set "value" to something appropriate.
+
+	Tcl_SetVar2(interp, "status", "nullvalue"  , "value", 0);
+	Tcl_SetVar2(interp, "status", "floatprec"  , "value", 0);
+	Tcl_SetVar2(interp, "status", "maxtext"    , "value", 0);
+	Tcl_SetVar2(interp, "status", "dateformat" , "value", 0);
+	Tcl_SetVar2(interp, "status", "fixedchar"  , "value", 0);
+
+
+

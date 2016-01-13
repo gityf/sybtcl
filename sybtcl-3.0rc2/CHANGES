@@ -1,0 +1,357 @@
+Sybtcl change history
+
+
+Version 1.0,  June 1992
+
+     First general release - it lives!
+
+--------------------------------------------------------------------------------
+
+Version 1.1,  August 1992
+
+     Added better handling for text and image datatypes.  Two new
+     commands, sybwritetext and sybreadtext allow text/image columns
+     to be read from/written to files.  Also added "maxtext" index into
+     sybmsg to allow a larger amount (user defined) of text/image 
+     to be returned via sybnext.
+
+     Updated "wisql" sample program to use Tk 2.2 text widget, returned
+     text columns are inserted into results listbox with breaks at 
+     newlines, view names of rules, triggers, views in addtition to
+     tables and procs.  Examine the text of rules, triggers, views, procs.
+     Report count of rows returned.
+
+     Added two more samples showing sybwritetext, sybreadtext commands.
+
+     Updated man page for new features.
+
+--------------------------------------------------------------------------------
+
+Version 1.2,  October 1992
+
+     Changed where dbsetopt is called to set DBTEXTSIZE.  Version 1.2
+     fixes a bug introduced in version 1.1 that sometimes causes the server to
+     abort a query with a 703 error (back-to-back execution of the exact
+     same SQL code would alternate success and failure.)
+     Accumulate server message numbers (msgno) the same way msgtext is 
+     accumulated.
+
+     Updated "wisql" - showFields now shows all characters of a column name
+     (up to 30). Sybmsg(msgno) added to error messages.  Changed message 
+     window to Message class.  Added arrow key bindings (right,left) to
+     SQL Text window and Entry classes.  Added Shift-Return and Control-Return
+     binding to SQL Text window to invoke "Execute".
+     Added a menu button to the signon window to select a server from the
+     interfaces file.
+
+     Updated "pubs_pix" to set a large sybmsg(maxtext) value when 
+     retrieving images.
+
+     Updated man page for sybmsg(maxtext) and (sybmsgno).
+
+--------------------------------------------------------------------------------
+
+Version 1.3,  May 1993
+
+     Fix sybtcl.c - error handler is passed a NULL pointer for oserrstr
+     when the error is not related to oserr.  This seemed to be a
+     problem on every machine except the one I developed on, where a
+     vaild pointer to a nil string was passed.  This fixes segmentation
+     faults that usually appear with a bad connect id or password.
+     Also, two others - replace strncpy() with strcpy() in Tcl_SybSql, where
+     no length was specified (or needed); in parse_columns(), if a 
+     "nullvalue" was specified it never was copied - wrong buffer.
+
+     Wisql changed to support Tk 3.0+ by changing the toplevel widget
+     pathnames to lower case.  Change #! exec line to wishx to reflect
+     Extended Tcl's new binary name.  Also find user "sybase" home
+     directory in "ypcat passwd" or /etc/passwd if SYBASE environment
+     variable is not set.
+     Change the "Execute" menu button to "Cancel" while the SQL is
+     exec'ed to cancel long running queries.
+
+     Change other samples to exec /usr/local/bin/wishx.
+
+     
+--------------------------------------------------------------------------------
+
+Version 2.0, October 1993
+
+     Support for Tcl 7.0 - a few minor changes to the existing code.
+     Added ?appname? argument on sybconnect from Jan Hendrik.
+     Changed sizing of buffer in getting server messages.
+     Changed malloc/free to ckalloc/ckfree if using TCL_MEM_DEBUG
+
+     Wisql now called wisqlite & changed to Tk 3.3 new pack syntax.
+     De Clarke's UCO Wisql included.
+
+     New - Makefile and appinit sed script.
+
+--------------------------------------------------------------------------------
+
+Version 2.1, February 1994
+
+     Added "commands" option to sybnext;  Sybtcl_Init() now returns (int).
+
+     wisqlite - uses new sybnext when possible
+     De Clarke's UCO Wisql included.
+
+--------------------------------------------------------------------------------
+
+Version 2.11, April 1994
+
+     change sybtcl.c - allow sybcols to return column names on empty result set.
+
+     De Clarke's UCO Wisql included.
+
+--------------------------------------------------------------------------------
+
+Version 2.2, October 1994
+
+     change sybtcl.c - now allows real numeric nulls ("") to be returned,
+     "default" is now used to set previous behavior (potential incompatibility).
+     can format date columns to a specific format.  clean up remainder of
+     external function names.
+
+     update man page.
+
+     minor changes to wisqlite: include command ring buffer from Oratcl's wosql;
+     set null value dialog.
+
+     change make/install procedure to use autoconf.  
+
+     De Clarke's latest UCO Wisql included.
+
+--------------------------------------------------------------------------------
+
+Version 2.3, August, 1995
+    changes to sybtcl.c - change behavior of sybnext when dbresults returns 
+    FAIL (no error); allow sybcancel to cancel anytime, not just on previous 
+    success; allow optional interfaces file parameter ?ifile? on sybconnect;
+    change sybnext with tcl-commands to return on crossing from REG_ROW to
+    compute rows, compute row is buffered to be returned on next sybnext;
+    added "async" option to sybsql, sybpoll command to check results;
+    added some casts to make gcc happy; small changes for Tcl 7.4 
+    (remove need for tclUnix.h/tclPort.h)  set dbversion to enable system
+    10 types numeric & decimal;  added handling for float types, with
+    optional user defined precision in sybmsg(floatprec)
+ 
+    wisqlite - added selection handler bindings from wosql.  change pack
+    order so that broken window managers won't cut off widgets on bottom.
+    add option dialog to set floatprec
+
+    changes configure.in to find tcl7.4/tk4.0, support newer autoconf
+    macros.  Added hunt for -lsocket -lnsl to configure.in, added to
+    makefile for tclsh target lib.
+
+--------------------------------------------------------------------------------
+
+Version 2.4, December, 1996
+    changes to sybtcl.c - execute dbsetopt() only on change of sybmsg(maxtext,
+    and cancel results so that rep server/open servers won't complain.  malloc
+    buffer of msgtext in msghandler so it can grow large.  added 
+    sybmsg(fixedchar) so trailing spaces from char/varchar won't be trimmed,
+    allows stored procedure text to be extracted correctly.  Add call to
+    Tcl 7.5 Tcl_PkgProvide() to declare package info.
+    make floats really look like floats, add .0 if needed, so that float value
+    can be used in expr without expr thinking it is too big for an int.
+    fix sybnextall to quote two occurances of substitution char, and to
+    accept a user defined substitution char.  add initialized check to
+    prevent reinitializing on subsequent 'load'.
+
+    changes to wisqlite - use sybmsg(fixedchar) to display stored procedure
+    text without crunching spaces.  add package require to force
+    autoloading Sybtcl shared lib.
+
+    New! sybtcl-capi - use Sybtcl from C, giving a simple interface over
+    DB-Lib.  written as a quick hack (Hi Roger!) to enable Sybtcl use from
+    other languages/environments.  i haven't done a lot of testing with it,
+    so feedback is welcome.
+
+    changes to Makefile/configure - nearly a total rewrite, should allow
+    Sybtcl to be nearly independent of Tcl/Tk/TclX source directories.  Relies
+    on Tcl/Tk/TclX to be installed properly, using tclConfig.sh (et.al) to
+    get version numbers, library info, tclAppInit.c files, etc.  Also build
+    libSybtcl.so on request, using Sybase shared lib also.  Installs or
+    updates and pkgIndex.tcl files in lib/tclx.x
+
+
+--------------------------------------------------------------------------------
+
+Version 2.5, November, 1997
+    changes to sybtcl.c - add support for win and mac compilation; use
+    TCL_DStrings in msg handler, thanks to D. J. Hagberg (dhagberg@gds.com);
+    minor changes in Sybtcl_Wrtext to accomodate dbtoct emulation layer and 
+    to enable write of null files (len = 0); add 'version' element to sybmsg;
+    add tclvars to be bound on sybnext /w commands.  add atexit handler to
+    call Sybtcl_Kill, remove calling Sybtcl_Kill on command deletion. increase
+    size of max procs to 50.  Explicitly call dbclose() in Sybtcl_Kill, don't
+    call dbexit() under Windows.  Fix bug in NextAll where argv[] command
+    string was manipulated, caused problems with Tcl 8.0
+
+    windows makefile and .dll, see ./win directory
+
+    mac makefile and library, courtesy Scott Kelley <sakelley@jeeves.ucsd.edu,
+    see ./mac directory
+
+    Wisqlite - drop requirement of TclX, use tk dialog and file boxes..
+
+    dbtoct.c - now sybtcl can be compiled using Sybase's CT-Lib (aka, Client
+    Library) by using a DB-Lib to CT-Lib emulation layer.  Recommended only
+    for systems that don't have DB-Lib, like Linux.  use '--enable-ctlib'
+    on configure.  see ctcompat/README.ctcompat for additional information.
+
+    makefile/configure support to default to building shared libraries; now
+    build libSybtcl with a version number.  reorganize
+    distribution directory with generic,unix,mac,win,doc,misc,samples
+    directories.  install pkgIndex.tcl in versioned directory.
+
+--------------------------------------------------------------------------------
+
+Version 3.0, April, 1999
+
+    sybtcl-capi - oops, 2.5 broke sybtcl-capi, apply fixes.; freeze sybtcl-capi
+    with sybtcl.c 2.6. probably won't support Tcl 8.0 interface in 
+    future releases for sybtcl-capi.
+
+    dbtoct.c - fix dbexit(), patch from Mephis Liang <liang@ttinet.com.tw>
+    ctcompat/sybfront.h - add previously missing typedefs for DBFLT8 and
+    DBREAL;  was causing invalid values returned for float types 
+    (thanks to Philip Quaif.)  much reworking of dbresults/dbnextrow
+    processing to use ct_bind.  now uses variable binding, except if result
+    contains one text or image column.  still other tweaks to dbconvert, etc.
+
+    sybtcl.c - change MS VC defines for syb_tcl_err_handler & 
+    syb_tcl_msg_handler to run properly with Sybase 11.5 libs on NT (thanks
+    to Jeff Jacobi <jeff.jacobi@lmco.com>).
+
+    fully support Tcl 8.0, 7.6 support dropped.
+
+    add new commands, syberrhandler & sybmsghandler, provide callbacks for 
+    error and messages.
+
+    rewrote parse_columns() to return database types into reasonable Tcl
+    types (ie., int, double, list).
+
+    SYBIMAGE and SYBBINARY data now returned bit for bit, no conversion to
+    hex strings.  ** potential incompatibility **  see next item.
+
+    add sybmsg(binaryashex), set to boolean true to converty image, binary,
+    to hex strings (compatibility with 2.5)
+
+    rewrote NextAll processing to use objs to build command string, much
+    cleaned up from previous versions.
+
+    NextAll varname column pairs can now be a list of varname column pairs.
+
+    "sybmsg(floatprec)" is deprecated, in favor of tcl data objects and
+    use of tcl_precision when converting doubles to string.
+
+    add charset argument on sybconnect.
+
+    new command: sybmoney, to manipulate sybase money values, operations
+    add, sub, mul, div, cmp using sybase routines.
+
+    error and msg handlers always set sybmsg & call handlers, even without
+    a valid dbproc.
+
+    add -file, -variable  options for sybreadtext/sybwritetext commands.
+
+    change sybreadtext/sybwritetext to use Tcl_xxx channel functions instead
+    of raw open/close/read/write/stat.  
+
+    add Sybtcl_SafeInit() initialization point.  use of sybtcl in safe
+    interpreters allows all functionality except reading/writing files during
+    sybreadtext/sybwritetext.
+
+    add Sybtcl_DeleteInterp to clean up dbprocs left open.  Should make
+    sybtcl a good neighbor when running in slave and safe interpreters.
+
+    add sybmsg(dblibinfo), "system10" if compiled with system 10 or higher libs 
+
+    trace all user options in sybmsg, mirror in per-interp struct for faster 
+    access, and validate values.
+    
+    add sybmsg(isnull), reflects true null values in returned row; isnull
+    element is a list with same number of elements as row returned.
+
+    clean up many warnings where local variables were unused.  
+
+    clean up windows DLL export code to use Tcl 8.0.3+ storage class.
+
+    Rearrange Sybtcl_NextAll to be before Sybtcl_Next, in order that
+    Mac MrC compiler is happier.  
+
+    Mac specific code - use Tcl_Seek to determine file length instead of
+    missing stat() on MPW.  Too bad that TclStat() is an internal 
+    (tclInt.h) function.
+
+    add sybevent command, similar to fileevent, script is invoked via Tcl
+    event handlers.
+
+    add sybmsg(bgevents) to allow processing of other Tcl events while
+    in Sybtcl code (sybsql w/o -async, sybnext w/ commands, sybwritetext,
+    sybreadtext.)  add sybmsg(bgpollinterval) to specify the lenght of
+    polling timeout.    ** potential incompatibility ** 
+
+    allow sybwritetext / sybreadtext to be preceeded by sybsql -async,
+    waits until result ready, process events based on sybmsg(bgevents)
+
+    fix bug in sybpoll where previous results may yield a ready proc by
+    canceling results in sybsql (cancel_prev).
+
+    configure & Makefile:
+    remove conf-tcl-74 directory, Sybtcl-3.0 no longer supports Tcl 7.x
+    versions.
+
+    Whoopee!  Sybase relases ASE for Linux.  No more need to use ctcompat
+    if you are a Linux user.  See:
+	http://www.sybase.com/adaptiveserver/linux/
+	http://www.redhat.com
+	http://www.caldera.com
+
+
+    test suite- brand new for this release.  probably needs some more test 
+    cases to provide for more coverage of C code, but it's a good start.
+
+    Macintosh port!  Thanks to Jim Ingham & Mark Roseman for some advice
+    on building Tcl extensions with Apple's MPW (rather than CodeWarrior).
+    MPW is now free, and I have access to a little-used Mac (well it does
+    play CDs in my office), plus Sybase libraries for the Mac.  PowerPC 
+    version only.  MPW makefile and pre-built shared library included.  
+
+    install.tcl - change to work on Mac as well as Windows.
+
+    man page - updated to reflect new & changed commands.
+
+    wisqlite - add dialog to save results to a file during sql fetches,
+    options for columnar or raw output, separator characters.
+    change floatprec to tcl_precision.  set sybmsg(bgevents) all to
+    keep window running.  break long menus of server names and database
+    names into multi-column menus.
+
+    beta2 release - fix silly handle index bug in sybconnect; fix 
+	syb12safe.test when no password is used; fix syb11text.test to check
+	for 'select into' db option; clean up makefile for
+	testing and installing wisqlite.  
+	add note in INSTALL to make sure 'select into/bulkcopy' db option is 
+	set, otherwise syb11text.test may fail or fill up log (-nolog used.)
+	minor tweaks to sybmon & sp_who; include in install-tools
+
+    beta3 release -  change man page .TH header, fix suggested by
+	Larry Virden.  Add 'sybevent' command based on code from
+	Ben Vitale.  Add sybmsg(bgevents) to process Tcl events while
+        waiting for server response.  Fix bug in sybclose where maxtext was 
+        not reset, thanks Ben Vitale.  add test case for sybevent, update docs.
+	Added a few #ifdefs for macintosh, to be more mac friendly.
+
+
+--- October 2000
+
+    Moved to SourceForge.  Added config/* to cvs tree (used to be included
+    as a cvs link).  -- hobbs
+
+--- December 2000
+
+    Package up 3.0 for release, changing several READMEs, installers, etc.
+

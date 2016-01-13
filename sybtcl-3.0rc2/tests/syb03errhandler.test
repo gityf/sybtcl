@@ -1,0 +1,33 @@
+# syb03errhandler.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+#
+# exercise syberrhandler
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+proc cnt_hndlr {args} {
+    global arg_cnt
+    set arg_cnt [llength $args]
+}
+
+test syberrhandler-1.1 {syberrhandler: count dblib arguments} {
+  global arg_cnt
+  set arg_cnt 0
+  syberrhandler cnt_hndlr
+  catch {sybuse $syb_hand you_should_not_have_this_db}
+  syberrhandler ""
+  set arg_cnt
+} {6}
+
+test syberrhandler-1.2 {syberrhandler: count dblib arguments plus one} {
+  global arg_cnt
+  set arg_cnt 0
+  syberrhandler "cnt_hndlr first_arg"
+  catch {sybuse $syb_hand you_should_not_have_this_db}
+  syberrhandler ""
+  set arg_cnt
+} {7}
+
+

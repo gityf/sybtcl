@@ -1,0 +1,125 @@
+Sybtcl for Windows
+
+BEFORE YOU BEGIN
+
+Sybtcl has been ported to Windows NT & 95.
+It has been tested with the latest stable version of Tcl, 8.3.2.
+
+You must also have a working Sybase client installation on your machine,
+as Sybtcl uses Sybase DLLs, notably 'libsybdb.dll'.
+
+
+INSTALLING SYBTCL FOR WINDOWS
+
+Easy install:
+ 
+I've written a tiny install script.  It figures out which of the two
+DLLs to install based on your Tcl version, copies that file to your
+Tcl library, makes a pkgIndex.tcl and installs it into a project directory.
+First, copy all files in this directory to some directory on your Windows
+PC.  e.g., c:\sybtcl
+
+To install, copy ALL of the files in the Sybtcl ./win directory to your PC, 
+and simply run the install.tcl file with your tclsh:
+ 
+	tclsh83 install.tcl
+        answer 'yes' when prompted.
+ 
+Manual installation instructions:
+
+1.  Install Sybase Open Client for Windows.  Make sure you can run
+    sybping and isql to connect to your databases.
+    Sybtcl depends on libsybdb.dll, so this must be installed, usually in 
+    your windows system directory.  Make sure that your
+    Sybase DLLs are in your path set by 'autoexec.bat' (Windows95) or in your
+    environment via the 'System' control panel (WindowsNT).  
+    You should also have the enviroment variable 'SYBASE' pointing to
+    your Sybase installation directory.  Sybtcl can work with either
+    Sybase System 10 or 11 client libraries.
+
+2.  Copy the sybtcl.dll to your Tcl .\lib directory.  
+    
+    copy sybtcl3083.dll  c:\program files\tcl\lib\sybtcl30.dll
+
+
+3.  Copy or add pkgIndex.tcl to your Tcl lib directory.  This is so
+    the 'package unknown' scripts can resolve the 'package ifneeded' to
+    load the dll.  
+    
+    The 'install.tcl' script makes a directory adjacent to your Tcl lib
+    called 'sybtcl30', and creates the pkgIndex.tcl there.
+
+    mkdir c:\program files\tcl\lib\sybtcl30
+    copy pkgIndex.tcl c:\program files\tcl\lib\sybtcl30
+
+4.  Try it out!
+
+    c:\> tclsh80
+    % package require Sybtcl
+    3.0 
+    % set h [sybconnect id password SERVER]
+    sybtcl0
+    % sybsql $h .....whatever....
+
+    If you get errors:
+
+    If 'package require' says it can't find package Sybtcl:
+	    -make sure you've installed the pkgIndex.tcl.
+	    -or just load the sybtcl.dll manually
+		    % load "c:/program files/tcl/lib/sybtcl30.dll"
+		    (or wherever you put it)
+    If 'sybconnect' complains about resolving symbols:
+	    -make sure you have the Sybase Open Client libraries installed
+	     and on the PATH
+
+    If 'sybconnect' fails in dbopen(), then you have a bad id, password,
+    or server definition.  Make sure you can connect to your database using
+    isql. 
+
+
+RUNNING TESTS
+    
+You can run the Sybtcl tests manually by:
+        Start tclsh80   (or appropriate version)
+          cd to_your_sybtcl_tests_directory
+          source all
+ 
+        You will also need to enter a vaild Sybase id, password, server,
+        and database that you have permission to create tables and 
+        stored procedures. 
+
+
+BUILDING SYBTCL FOR WINDOWS
+
+[Please note that Sybtcl should build as a TEA-compliant extension 
+using the Cygnus cygwin32 utilities in the directory above this one.
+A configure, make, make install sequence in cygwin's bash shell should
+work correctly.  For people with other environments, the instructions
+below should work as well]
+
+My development environment is:
+	Windows NT 4.0 SP3
+	Microsoft Visual C++ 5.0
+	Tcl 8.3.2 for Windows
+	Sybase Open Client for Windows 11.1 (works with Sybase 10.0.3+ libs)
+
+
+1.  Get and unpack the Tcl 8.3.2 (or higher) distribution (these instructions
+    should work for Tcl 8.0 and newer, but 8.3.2 is recommended for 
+    stability).  The 'binary' Tcl distribution contains the include and 
+    library files needed by Sybtcl.  Alternatively, you can get the full 
+    source Tcl distribution.
+
+2.  Modify the makefile as needed.  You'll probably have to change the
+    values for the TCL and SYBASE defines to suit.
+    The compiler will need to find your Sybase include files, and the
+    linker will need to find the libsybdb.lib file, as well as the
+    Tcl include and lib files..
+
+3.  Make it!  
+	C:\sybtcl> nmake -f makefile.vc
+
+4.  Install it as noted above.
+
+
+

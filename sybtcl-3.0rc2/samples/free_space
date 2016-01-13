@@ -1,0 +1,57 @@
+#!/usr/local/bin/tcl
+
+# free_space
+#
+# Copyright 1992, Tom Poindexter
+#
+# this tcl script prints the amount of database free space as a percentage
+# the default server is used (DSQUERY).
+# not much error checking is done.
+
+# usage: free_space userid password
+#
+
+global sybmsg
+
+set uid [lindex $argv 0]
+set pw  [lindex $argv 1]
+
+set dbnames ""
+
+# normally, i would catch errors from sybconnect
+# in this case, just let tcl print an error & exit
+
+set syb [sybconnect $uid $pw]
+
+sybuse $syb master
+
+sybsql $syb "sp_helpdb"
+set row [sybnext $syb]
+
+while {[string compare $sybmsg(nextrow) REG_ROW] == 0} {
+  if "[regexp model $row] == 0" {
+    lappend dbnames [lindex $row 0]
+  }
+  set row [sybnext $syb]
+}
+
+foreach db $dbnames {
+  sybcancel $syb
+  sybuse $syb $db
+  sybsql $syb "sp_spaceused"
+  set row [sybnext $syb]
+  set dbsize [lindex [lindex $row 1] 0]
+  sybnext $syb
+  set row [sybnext $syb]
+  set resrvd [lindex [lindex $row 0] 0]
+  set per [format "%4.1f%%" \
+	    [expr "(( $dbsize * 1024.0 ) - $resrvd ) / ( $dbsize * 10.240 )"] ]
+  echo "Database ${db}: $dbsize MB total, $resrvd KB Used, $per free"
+
+}
+
+sybclose $syb
+
+exit
+
+# finis

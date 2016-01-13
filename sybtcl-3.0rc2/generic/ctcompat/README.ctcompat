@@ -1,0 +1,117 @@
+ctcompat
+
+Copyright 1997,1999 Tom Poindexter
+
+This is a small interface layer to emulate enough of DB-Lib in CT-Lib to
+allow Sybtcl to function.   It is not a general purpose emulation of 
+DB-Lib.
+
+The (now former) main purpose of this code is to allow Sybtcl to be ported to 
+Linux, which Sybase released a CT-Lib version, but not a DB-Lib version.
+
+****WOW!!**** 
+Now you can get Sybase ASE for Linux for *free*.  You won't need ctcompat
+to run under Linux anymore!   ASE for Linux has DB-Lib.
+
+Get your Sybase ASE which includes DB-Lib from:
+	http://www.redhat.com
+	http://www.caldera.com
+	also see: http://www.sybase.com/adaptiveserver/linux/
+
+*********
+
+
+The major differences between using the real DB-Lib and this emulation
+layer is that error messages and codes are left in CT-Lib format and
+numbering, and thus will be incompatible with DB-Lib error numbers
+(sybmsg(dberr) & sybmsg(dberrstr)).
+
+This shouldn't be too much of a hardship, unless you have written code that
+looks for specific error messages.  
+
+Server messages (sybmsg(msgtext) & sybmsg(msgno)) should not be affected,
+since these numbers and messages orignate from the Sybase server, not
+from the interface library.
+
+To configure Sybtcl to use the ctcompat library, run Sybtcl's configure
+with '--enable-ctlib'.  It's should build either as static libraries 
+(--disable-shared) or as a dynamic shared lib (--enable-shared, default).
+
+If you would like to try out the ctcompat lib with other DB-Lib 
+programs, compile your existing DB-Lib programs with the sybxxx.h include
+files from the ctcompat directory, compile dbtoct.c with the same sybxxx.h
+headers and the Sybase CT-Lib headers, then link all together with
+the CT-Lib libraries.  Note that many DB-Lib functions are absent from
+dbtoct.c - most notable are dbbind() (and related) functions, browse
+mode functions, rpc specific functions,  and most of the support-type 
+functions (date conversion, money datatype manipulation, etc.)
+
+Running Sybtcl test suite:  not all tests pass when using ctcompat lib.
+In particular, background events (sybmsg(bgevents)) may not be entirely
+serviced.
+
+If you still intend to use the old Sybase Linux libraries, read on.
+If you are running a Linux that still uses libc, instead of the newer glibc,
+read on.
+
+
+NOTE:  The following information is out of date as of Sybtcl-3.0, since
+       Sybase DB-LIB is now available for Linux.  This section might be
+       useful if you are running an older version of Linux, built using
+       older 'libc5' libraries.
+
+Sybtcl on Linux-  
+
+Sybase showed some guts by releasing it's client libraries for Linux, but
+apparently has not released any updates.  (The story I've heard is that
+despite the warnings on the Linux release that Sybase would not support the
+Linux port, many people called Sybase for Linux help, and thus the folks at
+Sybase who released the Linux port were considered "the bad guys", and no
+more updates.  Confirmation or denial of this tidbit is for others to 
+determine.)
+
+The bad news is that Sybase released only CT-Lib and not DB-Lib, thus the
+reason for this ctcompat code.  The other bad news is that Sybase ported
+CT-Lib at a time when a.out libraries were the norm, before ELF was
+fully adopted. 
+
+
+ELF libs:
+
+Some kind soul has taken the Sybase a.out libs and converted
+them into ELF format.  This means you can compile and link without 
+the hassle of making and linking with a.out libraries.  
+
+Other places to find the ELF Sybase CT-Libs:
+
+	http://www.voicenet.com/~gray/ctlib-linux-elf.tar.gz
+	http://www.mbay.net/~mpeppler/Sybperl/ctlib-linux-elf.tar.gz
+
+
+One last point for Sybtcl on Linux.  'ld' doesn't seem to like to link with the
+large libSybtcl.a that is built during make.  ld may fail with: 
+	cc: Internal compiler error: program ld got fatal signal 11
+
+If this happens, you can still link a static Linux-ctlib-elf tcl or wish by
+'make static-link'.  E.g.:
+	
+		configure .....			(add appropriate configure opts)
+		make 				(will fail linking tcl)
+		make tkAppInit.o		(if building --without-tclx)
+		make tkXAppInit.o		(if building --with-tclx)
+		make static-link		(builds tcl & wish)
+		make install
+
+Alternatively, use --enable-shared (the default) on your configure to avoid 
+linking executables.
+
+
+in any case,
+DON'T BUG SYBASE FOR LINUX SUPPORT!!
+
+
+
+Tom Poindexter
+tpoindex@nyx.net
+
+

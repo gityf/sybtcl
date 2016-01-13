@@ -1,0 +1,412 @@
+#!/usr/local/bin/wishx
+
+#  pubs_pix
+# 	
+#  Copyright 1992 Tom Poindexter.
+#
+#  add/update images in pubs database, allow viewing with user defined viewer
+#  uses extended tcl, tk, and sybtcl interface
+#
+#  if you get failures on add or update, first check if you have insert
+#  and update permissions; other possible failures are log segment full,
+#  or no space in database to load new images.
+#
+#  usage: pubs_pix
+#
+
+
+# define global names in use
+global sybmsg
+global uid
+global syb
+global server
+
+set uid [id user]
+
+set syb {}
+
+# added for sybtcl 1.2 - sybmsg(maxtext) is now needed for sybreadtext
+set sybmsg(maxtext) 2147483647
+
+wm title    . "Pubs Pix"
+wm iconname . "Pubs Pix"
+
+
+proc getSignOn {} {
+  global uid
+  global env
+
+  wm geom     . 300x300
+  frame .s
+  message .s.m -justify center  -text "Pubs Sign on" -aspect 2000 \
+		-font -*-helvetica-bold-o-*-*-20-*-*-*-*-*-*-*
+  frame .s.i
+  entry .s.i.uid -relief sunken  -width 10 
+  label .s.i.id  -text "  User Id" -anchor e
+  frame .s.p
+  entry .s.p.pw  -relief sunken -width 10 \
+		 -font -*-symbol-*-r-*--20-*-*-*-*-*-*-*
+  label .s.p.p   -text "  Password" -anchor e
+
+  frame .s.s
+  entry .s.s.ser -relief sunken -width 10 
+  label .s.s.s   -text "  Server" -anchor e
+
+  message .s.err -text "" -justify center
+
+  frame .s.b
+  button .s.b.ok  -text "Sign on" \
+      -command {tryConnect [.s.i.uid get] [.s.p.pw get] [.s.s.ser get]}
+  button .s.b.can -text "Cancel" -command "destroy ."
+
+  pack append .  .s {top fill expand}
+  pack append .s .s.m {top fillx pady 20}
+  pack append .s .s.i {top pady 20 frame e}
+  pack append .s.i .s.i.uid {right expand padx 20} .s.i.id {left}
+  pack append .s .s.p {top pady 20 frame e}
+  pack append .s.p .s.p.pw  {right expand padx 20} .s.p.p  {left}
+
+  pack append .s .s.err {top fillx expand}
+  pack append .s  .s.b {bottom fillx }
+  pack append .s.b .s.b.ok {left fillx expand} .s.b.can {left fillx expand}
+
+  pack append .s .s.s {bottom pady 20 frame e}
+  pack append .s.s .s.s.ser {right expand padx 20} .s.s.s  {left}
+
+  .s.i.uid insert 0 $uid
+
+  if {[lsearch [array names env] DSQUERY] >= 0} {
+    .s.s.ser insert 0 $env(DSQUERY)
+  } else {
+    .s.s.ser insert 0 SYBASE
+  }
+  focus .s.p.pw
+
+  bind .s.i.uid <KeyPress-Return> "focus .s.p.pw"
+  bind .s.p.pw  <KeyPress-Return> ".s.b.ok invoke"
+  bind .s.s.ser <KeyPress-Return> ".s.b.ok invoke"
+}
+
+# kick off the entire process
+
+getSignOn
+
+
+############################################################################
+# all procs follow
+
+########################
+#
+# tryConnect
+#
+#   try a connection to the sybase server
+#
+
+proc tryConnect {id pw ser} {
+  global sybmsg
+  global syb
+  global server
+
+  set server $ser
+
+  set retcode [catch {set syb [sybconnect $id $pw $ser]}]
+
+  if $retcode==0 {
+    destroy .s
+    set retcode [catch {sybuse $syb pubs2} ]
+    if $retcode==0 {
+      createMain
+    } else {
+      echo "can't use pubs2 database in $ser.  bye now."
+      sybclose $syb
+      exit
+    }
+  } else  {
+    .s.err configure -text $sybmsg(dberrstr)
+    focus .s.p.pw
+  }
+}
+
+
+########################
+#
+# createMain
+#
+#   create the main window
+#
+
+proc createMain {} {
+  global syb
+  global sybmsg
+
+  wm geom    . 850x400
+
+  # create a top level frame
+
+  frame .m -relief flat
+
+  pack append . .m {top fill expand}
+
+  # create a menu bar with some menu buttons
+
+  frame .m.mb -relief raised -borderwidth 2
+  button .m.mb.add -text "Add Image" -command addImage -width 13
+  button .m.mb.up  -text "Update Image" -command updateImage -width 13
+  button .m.mb.view -text "View Image" -command viewImage -width 13
+  button .m.mb.quit -text "Quit" -command "sybclose $syb; destroy ." -width 13
+
+  pack append .m .m.mb {top fillx}
+  pack append .m.mb .m.mb.add {left} .m.mb.up {left} .m.mb.view {left} \
+    .m.mb.quit {left} 
+
+  # create a frame for entry boxes
+
+  frame .m.e -relief flat
+
+  label .m.e.l1 -text "Key:" -anchor e -width 4
+  entry .m.e.key -relief sunken -width 15
+
+  label .m.e.l2 -text "Image file:" -anchor e -width 9
+  entry .m.e.file -relief sunken -width 15
+
+  label .m.e.l3 -text "Type:" -anchor e -width 5
+  entry .m.e.type -relief sunken -width 15
+
+  label .m.e.l4 -text "View Cmd:" -anchor e -width 9
+  entry .m.e.cmd -relief sunken -width 25
+
+  pack append .m .m.e {top fillx}
+  pack append .m.e .m.e.l1 {left} .m.e.key {left} .m.e.l2 {left} \
+		   .m.e.file {left} .m.e.l3 {left} .m.e.type {left} \
+		   .m.e.l4 {left} .m.e.cmd {left}
+
+  message .m.m -aspect 3000 -relief raised -borderwidth 3 -text \
+  "Pubs Pix - Instructions\n\n\
+   Add Image - enter a Key, a File name, and Image Type; press Add\n\
+   Update Image - enter a Key, a File name, and Image Type; press Update\n\
+   View Image - enter a Key and Viewer Command; press View\n\n\
+   Double Click with button 1 on a list entry to\n\
+   populate Key, Type, and a default Viewer Command.\n\
+   Viewer Command must expect it's input on stdin."
+
+  pack append .m .m.m {top fillx}
+
+  # create a frame listing keys & types
+
+  frame .m.o -relief raised
+  pack append .m .m.o {top fill expand}
+
+  label .m.o.l -text "  Keys and Types  " -relief raised -borderwidth 2
+  scrollbar .m.o.vert -relief sunken -command ".m.o.out yview" \
+	  -orient vertical
+  listbox .m.o.out -relief sunken \
+          -font -*-courier-*-r-*-*-14-*-*-*-*-*-*-*  \
+	  -yscroll ".m.o.vert set" -selectmode single
+
+
+  bind .m.o.out <Double-1> \
+   "popKeyType \[selection get\] "
+
+  pack append .m.o .m.o.l {top fillx}
+  pack append .m.o .m.o.vert {right filly}
+  pack append .m.o .m.o.out {left fill expand}
+
+
+  # create a message at the bottom
+
+  label .m.msg -text "" -width 40 -relief sunken \
+	-font -*-helvetica-bold-o-*-*-17-*-*-*-*-*-*-*
+    
+  pack append .m .m.msg {bottom fillx}
+
+  .m.msg configure -text "At your service....."
+
+  popKeys
+
+}
+
+
+
+########################
+#
+# setMsg
+#
+#   set the text for the label at bottom of results window
+#
+
+proc setMsg {msg_text}  {
+  .m.msg configure -text $msg_text
+  update
+}
+
+
+########################
+#
+# popKeyType
+#
+#   populate the key and type entries
+#
+
+proc popKeyType {pick} {
+  global syb
+  global sybmsg
+
+  set line [lindex $pick 0]
+  set key [lindex $line 0]
+  set type [lrange $pick 1 end]
+
+  .m.e.key delete 0 end
+  .m.e.key insert 0 $key
+  .m.e.type delete 0 end
+  .m.e.type insert 0 $type
+
+  set viewer [switch -glob $type {
+    {Sun*} {format " xv -"}
+    {PICT*} {format " picttoppm | xv -"}
+    {GIF}   {format " xv -"}
+    {TIF*}  {format " xv -"}
+    {Text}  {format " more"}
+    {default} {format " yourviewer"}
+  }]
+
+  .m.e.cmd delete 0 end
+  .m.e.cmd insert 0 $viewer
+}
+
+
+########################
+#
+# popKeys
+#
+#   populate the keys and types listbox
+#
+
+proc popKeys {} {
+  global syb
+  global sybmsg
+
+  .m.o.out delete 0 end
+  sybsql $syb "select au_id, format_type from au_pix order by au_id"
+  set row [sybnext $syb]
+  while {[string compare $sybmsg(nextrow) REG_ROW] == 0} {
+    .m.o.out insert end "[lindex $row 0]    [lindex $row 1] "
+    set row [sybnext $syb]
+  }
+
+}
+
+
+
+########################
+#
+# addImage
+#
+#   add an image to the pubs au_pics
+#
+
+proc addImage {} {
+  global syb
+  global sybmsg
+
+  set f    [.m.e.file get]
+  set key  [.m.e.key  get]
+  set t    [.m.e.type get]
+
+  if {[string length $key] == 0} {
+    setMsg "key must be entered"
+    return
+  }
+
+  if {![file isfile $f]} {
+    setMsg "File $f not found"
+    return
+  }
+  
+  sybsql $syb "select au_id from au_pix where au_id ='$key'"
+  if {[string compare $sybmsg(nextrow) REG_ROW] == 0} {
+    setMsg "Key $key already exists"
+    return
+  }
+
+  # all's fine, add the image
+  sybsql $syb "insert into au_pix(au_id,format_type) values('$key','$t')"
+  sybsql $syb "update au_pix set pic = null where au_id = '$key'"
+  sybsql $syb "select pic from au_pix where au_id = 'key'"
+  set fsize [sybwritetext $syb au_pix.pic 1 $f]
+
+  setMsg "$fsize bytes stored"
+
+  popKeys
+
+}
+
+########################
+#
+# updateImage
+#
+#   add and image to the pubs au_pics
+#
+
+proc updateImage {} {
+  global syb
+  global sybmsg
+
+  set f    [.m.e.file get]
+  set key  [.m.e.key  get]
+  set t    [.m.e.type get]
+
+  if {[string length $key] == 0} {
+    setMsg "key must be entered"
+    return
+  }
+
+  if {![file isfile $f]} {
+    setMsg "File $f not found"
+    return
+  }
+  
+  sybsql $syb "update au_pix set format_type = '$t' where au_id ='$key'"
+
+  sybsql $syb "select au_id from au_pix where au_id ='$key'"
+  if {[string compare $sybmsg(nextrow) REG_ROW] != 0} {
+    setMsg "Key $key not found"
+    return
+  }
+
+  # all's fine, rewrite the image
+  sybsql $syb "select pic from au_pix where au_id = '$key'"
+  set fsize [sybwritetext $syb au_pix.pic 1 $f]
+
+  setMsg "$fsize bytes stored"
+
+  popKeys
+
+}
+
+
+########################
+#
+# viewImage
+#
+#   extract and view an image
+#
+
+proc viewImage {} {
+  global syb
+  global sybmsg
+
+  set key  [.m.e.key get]
+  set view [.m.e.cmd get]
+  set tmp  /tmp/[id user].[id process]
+
+  sybsql $syb "select pic from au_pix where au_id = '$key'"
+
+  set bytes [sybreadtext $syb $tmp]
+  setMsg "$bytes selected from au_pix"
+  
+  system "cat $tmp | $view"
+
+  unlink -nocomplain $tmp
+}
+
+

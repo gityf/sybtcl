@@ -1,0 +1,71 @@
+# syb06poll.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+# 
+# exercise various combinations of sybsql -async and sybpoll
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+test sybpoll-1.1 {sybpoll: async with blocking sybnext } {
+  sybsql $syb_hand "select * from sybtcl___tests" -async
+  set cnt1 0
+  set i 0
+  sybnext $syb_hand {incr cnt1}
+  format "$cnt1 $sybmsg(nextrow)"
+} {30 NO_MORE_ROWS}
+
+
+test sybpoll-1.2 {sybpoll: async with polling} {
+  sybsql $syb_hand "select * from sybtcl___tests" -async
+  while {[sybpoll $syb_hand] == ""} {}
+  set cnt1 0
+  set i 0
+  sybnext $syb_hand {incr cnt1}
+  format "$cnt1 $sybmsg(nextrow)"
+} {30 NO_MORE_ROWS}
+
+test sybpoll-1.3 {sybpoll: async with polling wait} {
+  sybsql $syb_hand "select * from sybtcl___tests" -async
+  sybpoll $syb_hand -1
+  set cnt1 0
+  set i 0
+  sybnext $syb_hand {incr cnt1}
+  format "$cnt1 $sybmsg(nextrow)"
+} {30 NO_MORE_ROWS}
+
+test sybpoll-1.4 {sybpoll: async with long polling wait} {
+  sybsql $syb_hand "select * from sybtcl___tests" -async
+  sybpoll $syb_hand 10000
+  set cnt1 0
+  set i 0
+  sybnext $syb_hand {incr cnt1}
+  format "$cnt1 $sybmsg(nextrow)"
+} {30 NO_MORE_ROWS}
+
+test sybpoll-1.5 {sybpoll: async with polling wait forever} {
+  set syb_hand2 [sybconnect $syb_userid $syb_pw $syb_server]
+  sybuse $syb_hand2 $syb_db
+  sybsql $syb_hand "select * from sybtcl___tests" -async
+  sybsql $syb_hand2 "select * from sybtcl___tests order by descending v_smallint" -async
+  set result [sybpoll $syb_hand -1 -all]
+  catch {sybnext $syb_hand}
+  catch {sybnext $syb_hand2}
+  catch {sybcancel $syb_hand}
+  catch {sybcancel $syb_hand2}
+  sybclose $syb_hand2
+  set cnt1 [expr {[llength $result] >= 1}]
+  set cnt1
+} {1}
+
+test sybpoll-1.6 {sybpoll: async with timeout poll} {
+  sybsql $syb_hand "waitfor delay '00:00:05' select * from sybtcl___tests" -async
+  set result [sybpoll $syb_hand 3000]
+  set cnt1 0
+  set i 0
+  sybnext $syb_hand  ;# eat waitfor
+  sybnext $syb_hand {incr cnt1}
+  format "[string length $result] $cnt1 $sybmsg(nextrow)"
+} {0 30 NO_MORE_ROWS}
+
+

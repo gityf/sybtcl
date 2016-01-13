@@ -1,0 +1,847 @@
+.TH "Sybtcl" n 3.0 Sybtcl "Tcl Sybase Extension"
+.SH NAME
+Sybtcl - Sybase SQL Server access commands for Tcl
+.SH "INTRODUCTION"
+.P
+Sybtcl is a collection of Tcl 
+commands and a Tcl global array that provides access to a Sybase Server.
+Each Sybtcl command generally invokes several 
+Sybase Open Client (a.k.a. DB-Library) library functions.
+Programmers using Sybtcl should be familar with basic concepts of
+DB-Library programming.  
+.sp
+.SH "SYBTCL COMMANDS"
+.TP
+.B sybconnect \fIlogin-name password ?server? ?appname? ?ifile? ?charset?\fR
+.br
+Connect to a Sybase server using \fIlogin-name\fR and \fIpassword\fR.
+If \fIserver\fR is specified, then an attempt will be made to login to the
+named Sybase server.  If \fIserver\fR is not specified, then the 
+environment variable \fIDSQUERY\fR is used to determine a server; if
+\fIDSQUERY\fR is not set, sybconnect will try to connect to the Sybase
+server named \fISYBASE\fR.  If an \fIappname\fR is specified, then that
+value is passed to the server to display during a process list.
+If \fIifile\fR is specified, that file is used to resovle server addresses;
+if not specified, the normal $SYBASE/interfaces file is used.
+If \fIcharset\fR is specified, the charset should reference a vaild
+character set available on your Sybase installation.  
+See the $SYBASE/charsets directory for charsets supported on your 
+installation.
+.sp
+\fILogin-name\fR and \fIpassword\fR are required parameters.  All other
+parameters are optional postitional parameters.  For example, to specify
+the \fIifile\fR paramater, \fIserver\fR and \fIappname\fR must
+also be specified.  Optional parameters may be a null string, in which
+case the default value is used.
+.sp
+A handle is returned and should be used for all other Sybtcl
+commands using this connection.  Multiple connections to the same or
+different servers are allowed, up to a maximum of 50 total connections.
+Sybconnect raises a Tcl error if the connection 
+is not made for any reason (login or password incorrect, server not found
+in the Sybase interfaces file, network unavailable, etc.).
+.sp
+.TP
+.B syberrhandler \fI?tclproc?\fR
+.br
+Set a Tcl procedure to be called upon any DB-Lib error.  The Tcl procedure
+should exist, and take the following arguments to the procedure:
+.RS
+.TP
+.I handle
+.br
+The Sybtcl handle associated with the error condition.  Handle may be a
+null string, such as in the case of an error occurring during sybconnect.
+.TP
+.I severity
+The Sybase severity level of the error.
+.TP
+.I dberr
+The Sybase DB-Lib error code.
+.TP
+.I oserr
+The operating system error code.
+.TP
+.I dberrstr
+The DB-Lib error string associated with the error code.
+.TP
+.I oserrstr
+The operating system error string associated with the error.
+.RE
+Example:
+.sp
+	proc err_handler {handle severity dberr oserr dberrstr oserrstr} {
+.br
+	    puts "error: $handle $severity $dberr $oserr $dberrstr $oserrstr"
+.br
+	    return 1
+.br
+	}
+.br
+	syberrhandler err_handler
+.br
+.sp
+The procedure may also return an integer value to indicate an action to
+perform:
+.RS
+.TP
+"0"
+print an error message and abort the  program immediately.
+.TP
+"1" 
+continue by returning a "FAIL" condition to the currently executing 
+DB-Lib function.
+.TP
+"2"
+cancel the operation that caused the error if a result of a timeout
+condition.  For any other case, this value is considered as "0", 
+immediate program termination.
+.TP
+"3" 
+continue to wait for one additional time out 
+period if a result of a timeout condition.  For any other case, this value is 
+considered as "0", immediate program termination. 
+.RE
+If no value is
+returned, or any other value is return, Sybtcl treats the return value
+as "1" (continue).
+.sp
+Syberrhandler called without an argument returns the current error handler.
+If called with a null string, the error handler is disabled.
+.sp
+.TP
+.B sybmsghandler \fI?tclproc?\fR
+.br
+Set a Tcl procedure to be called upon any server message.  The Tcl procedure
+should exist, and take the following arguments to the procedure:
+.RS
+.TP
+.I handle
+.br
+The Sybtcl handle associated with the error condition. 
+.TP
+.I msgno
+The Sybase server message number.
+.TP
+.I msgstate
+The Sybase server message state.
+.TP
+.I severity
+The Sybase severity level of the error.
+.TP
+.I msgtext
+The server message text.
+.TP
+.I svrname
+The name of the server generating the message.
+.TP
+.I procname
+The name of the procedure generating the message, if any.
+.TP
+.I line
+The line numer of the procedure generating the message, if any.
+.RE
+Example:
+.sp
+	proc msg_handler {handle msgno msgstate severity msgtext svrname procname line} {
+.br
+	    puts "msg: $handle $msgno $msgstate $severity $msgtext $svrname $procname $line"
+.br
+	}
+.br
+	syberrhandler msg_handler
+.br
+.sp
+Sybghandler called without an argument returns the current message handler.
+If called with a null string, the message handler is disabled.
+.sp
+.TP
+.B sybuse \fIhandle ?dbname?\fR
+.br
+Return the database name currently in use.  If \fIdbname\fR is specified, then
+attempt to use the named database.  
+\fIHandle\fR must be a valid handle previously opened with sybconnect.
+If \fIdbname\fR is used successfully, the dbname is returned.
+Sybuse raises a Tcl error if the handle specified is not open or
+the database name specified could not be used.
+.sp
+.TP
+.B sybsql \fIhandle sql-command  ?-async?\fR
+.br
+Send the Sybase Transact SQL statements \fIsql-command\fR to the server.
+\fIHandle\fR must be a valid handle previously opened with sybconnect.
+If the optional argument \fB-async\fR is specified, then the SQL is sent to
+the server without waiting for a response and
+sybsql will return immediately with the value "PENDING".  The sybpoll command
+can be used to check the status of the server results; sybnext must be
+called to determine if result rows were generated.  If \fB-async\fR is omitted,
+then sybsql will wait until the server has responed.
+Sybsql will return "REG_ROW" if
+the SQL statements generated return rows, "NO_MORE_ROWS" if the SQL commands
+executed, but no rows were returned in the first or only set of
+results.  The \fBsybmsg\fR array index
+\fIretstatus\fR
+is set with the return code of a stored procedure, if any; the 
+\fInextow\fR index is also set to the value returned by sybsql.
+.sp
+Multiple SQL statements may be specified in \fIsql-command\fR.  
+\fISybnext\fR allows
+retrieval of return rows generated; \fISybretval\fR allows retrieval of any
+return values from stored procedures.
+See notes regarding stored procedure output variables.
+.sp
+Sybsql performs an implicit \fIsybcancel\fR if any results are still
+pending from the last execution of sybsql.
+Sybsql raises a Tcl error if the handle specified is not open, or if the
+SQL commands are syntactically incorrect.  
+.sp
+Table inserts made with sybsql should follow conversion rules in
+the Sybase Commands Reference manual (image or binary data is hexadecimal
+string preceded with "0x"; datetime should be a recognizable date, etc.
+The SQL Server CONVERT function may be used to force conversions.
+.sp
+.TP
+.B sybpoll \fIhandle  ?timeout?  ?-all?\fR
+.br
+Return a list of Sybtcl handles that have results waiting.
+\fIHandle\fR must be a valid handle previously opened with sybconnect.
+If the last SQL results are not ready, a null string is returned.  An optional
+\fItimeout\fR value in milliseconds may be specified, which is the amount
+of time the sybpoll will wait before returning a result.  
+If the timeout value is -1, sybpoll will wait until results are available
+before returning.  The default timeout value is 0, which polls and 
+immediately returns.
+.sp
+The option \fI-all\fR may be specified, in which all handles that have been
+executed with -async are checked, and a Tcl list of all handles that have
+results waiting are returned.  When \fI-all\fR is combined with a timeout of 
+-1, then sybpoll waits until any async handle has results waiting, and then
+returns a list of all handles that have results waiting.
+If the last SQL statements executed with \fIhandle\fR were not sent as
+-async with sybsql, sybpoll returns a null string.
+.sp
+.TP
+.B sybevent \fIhandle  ?script?\fR
+.br
+Arrange to run a script when server data is available.
+\fIHandle\fR must be a valid handle previously opened with sybconnect.
+\fISybsql\fR must have previously been executed, without or without 
+\fI-async\fR mode.  The event handler script should execute
+\fIsybnext\fR in order to process available data.  The event handler may
+be executed during any phase of result processing including REG_ROW, compute
+rows, NO_MORE_ROWS, and NO_MORE_RESULTS.
+.sp
+If \fI?script?\fR is not specified, the existing event handler script
+is returned.  
+If \fI?script?\fR is a null string, the event handler is removed.  The 
+event handler is also removed at end of all results for the current
+SQL statement.
+.sp
+For the event handler to actually run, the Tcl interpreter must be
+processing events.  Events can be processed on demand by executing the Tcl
+\fBupdate\fR command, or until a variable is set with the 
+\fBvwait\fR command.  Events are also processed while a Tk (wish) program
+is waiting on user input.
+.sp
+Sybtcl's callback handler is greedy; it continues to invoke the sybevent
+script while data rows are available.  To allow other Tcl events to
+be processed, 
+set \fIsybmsg(bgevents)\fR to \fBidletasks\fR or \fBall\fR.  
+.sp
+.TP
+.B sybnext \fIhandle  ?commands?  ?substitution_character?  ?tclvar colnum ...?\fR
+.br
+Return the next row from the last SQL statements executed with sybsql as a
+Tcl list.
+\fIHandle\fR must be a valid handle previously opened with sybconnect.
+Sybnext raises a Tcl error if the handle specified is not open.
+A null string is
+returned if there are no more rows in the current set of results.
+The Tcl list that is returned by sybnext contains the values of the
+selected columns in the order specified by \fIselect\fR.
+.sp
+If the SQL statements where executed with the -async option of sybsql, then
+sybnext will wait until results are available.  Sybpoll may be used
+to check for results in a non-blocking manner.  
+Any errors in the SQL statements will cause
+sybnext to fail.
+.sp
+The optional \fIcommands\fR argument allows sybnext to repeatedly
+fetch rows and
+execute \fIcommands\fR for each row.
+Substitutions are made on \fIcommands\fR before passing it to Tcl_Eval()
+for each row.  An optional argument consisting of a single character
+can be specified for a column number
+substitution character.  If none is specified, 
+the character '@' will be used to denote the substitution character.   
+If the substitution character is a null string, no column substitutions will
+be performed on the \fIcommands\fR string.
+Sybnext interprets the substitution character followed by
+a number (\fB@n\fR) in \fIcommands\fR as a
+result column specification.  For example,
+\fB@1, @2, @3\fR refer to the first, second, and third columns
+in the result.  \fB@0\fR refers to the entire result row, as a Tcl list.
+Substitution columns may appear in
+any order, or more than once in the same command.
+Substituted columns are inserted into the \fIcommands\fR string as
+proper list elements, i.e., one space will be added before and after the
+substitution and column values with embedded spaces are enclosed by {}
+if needed.
+.sp
+Tcl variables may also be set for \fIcommands\fR on each row that is
+processed.  Tcl variables are specified after the \fIsubstitution_character\fR,
+consisting of matching pairs of Tcl variable names and a column numbers.
+Column number may be "0", in which the Tcl variable is set to the
+entire result row as a Tcl list.  Column numbers must be less than or equal
+to the number of columns in the SQL result set.
+.sp
+Tcl variable column pairs may also be specified as a list argument.
+.sp
+Sybnext will execute \fIcommands\fR until NO_MORE_ROWS.  If additional
+results are pending, subsequent sybnext commands will retrieve the next
+set of results.  
+.sp
+A Tcl error is raised if a column substitution number is greater than the
+number of columns in the results.  
+Note that Transact-SQL "compute" statements are considered to be part 
+of the current select's result set, and thus, a different number of columns
+may be returned, causing the sybnext column substitution to fail when the
+compute row is returned.  
+If the commands execute \fBbreak\fR,
+sybnext execution is interrupted and returns with TCL_OK.  Remaining
+rows may be fetched with a subsequent sybnext command.
+If the commands execute \fBreturn\fR or \fBcontinue\fR, the remaining
+commands are skipped and sybnext execution continues with the next row.
+Sybnext will raise a Tcl error if the \fIcommands\fR return an error.
+Commands should be enclosed in "" or {}.
+.sp
+The \fBsybmsg\fR array index \fIretstatus\fR
+is set with the return code of a stored procedure, if one was executed in
+the last SQL command to sybsql; the index \fInextrow\fR is set to 
+one of several values,
+depending on the results of sybnext.  Refer to the section
+"SERVER MESSAGE AND ERROR INFORMATION" for information about
+how the \fInextrow\fR value is set.
+.sp
+When \fIsybmsg\fR array element \fIbinaryashex\fR is set 
+to '1', 'yes', or 'true', 
+sybnext performs conversions for image and binary data.  Data is returned 
+as a hexadecimal string, without a leading "0x".  Use the SQL Server function
+CONVERT to force a specific conversion.
+.sp
+The \fBsybmsg\fR array index \fImaxtext\fR limits the amount of text or
+image data returned for each column returned.  The default is 32768 bytes.  
+.sp
+The \fBsybmsg\fR array index \fInullvalue\fR can be set to specify
+the value returned when a column is null.  The default is "0" for
+numeric data, and "" for other datatypes.
+.sp
+.TP 
+.B sybcols \fIhandle\fR
+.br
+Return the names of the columns from the last sybnext or sybretval command  
+as a Tcl list.  Sybcols returns the column name used in the 
+SQL select command; a null string for any column that is an
+aggregate function (count, sum, avg, min, max) in a regular row.  A
+compute row column name is returned as \fIfunction(column-name)\fR.
+Sybcols may be used after \fIsybretval\fR, in which the output variable
+names are returned (see notes).  
+.sp
+The \fBsybmsg\fR array index \fIcollengths\fR
+is set to a Tcl list corresponding to the lengths of the columns;
+index \fIcoltypes\fR
+is set to a Tcl list corresponding to the types of the columns.
+Sybcols raises a Tcl error if the handle specified is not open.
+.sp
+.TP 
+.B sybcancel \fIhandle\fR
+.br
+Cancel any pending results from the last sybsql command.  
+\fIHandle\fR must be a valid handle previously opened with sybconnect.
+Sybcancel may 
+be used before sybnext exhausts all results.  
+Sybcancel raises a Tcl error if the handle specified is not open.
+.sp
+.TP 
+.B sybretval \fIhandle\fR
+.br
+Return a Tcl list of the return values from a stored procedure.  
+\fIHandle\fR must be a valid handle previously opened with sybconnect.
+If a stored procedure also returns rows, sybnext must have previously
+been called until NO_MORE_ROWS was encountered before sybretval can access
+the return values.  
+The \fBsybmsg\fR array index \fIretstatus\fR 
+contains the return code from the stored procedure.
+Sybretval raises a Tcl error if the handle specified is not open.
+See notes regarding stored procedure output variables.
+.sp
+.TP 
+.B sybwritetext  \fIhandle object colnum [ -variable varname | -file filename | filename ] ?-nolog?\fR
+.br
+Write the contents of a variable or file to a TEXT or IMAGE column.
+\fIHandle\fR must be a valid handle previously opened with sybconnect.
+\fIObject\fR is the table and column name in the format \fBtable.column\fR.
+\fIColnum\fR is the relative position of the column from the last 
+\fBselect\fR.  \fIvarname\fR is the name of a Tcl variable containing data, or
+\fIfilename\fR is the name of the file that contains the
+text or image data to write into the column.  Text and image
+writes are logged by default, \fB-nolog\fR may be specified to disable
+logging (the database must have previously been set with a no log option.)
+If neither \fB-variable\fR or \fB-file\fR is specified, the argument is
+interpreted as a filename.
+.sp
+Sybwritetext can only be used in a specific sequence with other
+sybsql commands.  Refer to the Sybase DB-Library documentation for 
+dbwritetext() and the DB-Library Reference Supplement
+discussion on text/image handling.
+.sp
+For example (assume $hand is an open handle, using the "pubs" database):\fB
+.sp
+	sybsql $hand "insert into au_pix (au_id) values ('111-22-3333')"
+.br
+	sybsql $hand "update au_pix set pic = null where au_id = '111-22-3333'"
+.br
+	sybsql $hand "select pic from au_pix where au_id = '111-22-3333'"
+.br
+	sybwritetext $hand au_pix.pic 1 image.file -nolog\fR
+.br
+.sp
+An update to an existing text or image column can be made using the last
+two commands from the above example.
+Sybwritetext returns a integer number upon successful completion of the
+number of bytes written to the text/image column.
+.sp
+Sybwritetext raises a Tcl error for a variety of reasons:  filename could not
+be opened or a failure in internal DB-Library routines.  Common failures
+are specifing \fB-nolog\fR when the database does not support nolog; 
+unable to access a valid text pointer 
+due to invalid \fBobject\fR or \fBcolnum\fR;
+sybwritetext used out of sequence.
+Consult \fBsybmsg(msgtext)\fR or \fBsybmsg(dberrstr)\fR for information
+after a failure.
+.sp
+.TP 
+.B sybreadtext  \fIhandle [ -variable varname | -file filename | filename ]\fR
+.br
+Read the contents of a TEXT or IMAGE column and write results into a 
+variable or a file.
+\fIHandle\fR must be a valid handle previously opened with sybconnect.
+\fIvarname\fR is the name of a Tcl variable, or 
+\fIFilename\fR is the name of a file in which to write the text or image
+data.  Sybreadtext can only be used after the successful \fBselect\fR of
+a single text or image column.  
+If neither \fB-variable\fR or \fB-file\fR is specified, the argument is
+interpreted as a filename.
+For example (assume $hand is an open handle, using the "pubs" database):\fB
+.sp
+	sybsql $hand "select copy from blurbs where au_id = '486-29-1786'"
+.br
+	sybreadtext $hand blurb.txt\fR
+.br
+.sp
+Sybreadtext returns a decimal number upon successful completion of the
+number of bytes read from the text/image column.
+Sybreadtext returns "0" if
+the last select returned more than
+one column or no row was returned.
+.sp
+The \fBsybmsg\fR array index \fImaxtext\fR limits the amount of text or
+image data that can be written to a file by
+sybreadtext.  The default is 32768 bytes.  
+.sp
+Sybreadtext raises a Tcl error for a variety of reasons:  filename could not
+be opened, sybreadtext used out of sequence, etc.
+.sp
+.TP 
+.B sybclose \fIhandle\fR
+Closes the server connection associated with \fIhandle\fR.  
+\fIHandle\fR must be a valid handle previously opened with sybconnect.
+Sybclose returns a null string.
+Sybclose raises a Tcl error if the handle specified is not open.
+.sp
+.SH "SERVER MESSAGE AND ERROR INFORMATION"
+.P
+Sybtcl creates and maintains a Tcl global array to provide feedback of
+Sybase server messages, named \fBsybmsg\fR.  Sybmsg is also used to
+communicate with the sybtcl interface routines to
+specify null return values
+and text/image limits.
+In all cases except for \fInullvalue\fR, \fIfixedchar\fR, \fIfloatprec\fR, 
+\fIdateformat\fR, \fIbgevents\fR, \fIbgpollinterval\fR and \fImaxtext\fR, 
+each element is
+reset to null upon invocation of any sybtcl command, and any 
+element affected by the command is set.  The sybmsg array is shared 
+among all open sybtcl handles.  Sybmsg should be defined with the
+global statement in any Tcl procedure needing access to sybmsg.
+.P
+Sybmsg elements:
+.sp
+.TP
+.B version
+.br
+is set to the version of Sybtcl.
+.sp
+.TP
+.B nullvalue
+.br
+can be set by the programmer to indicate the string value returned for
+any null result.  Setting sybmsg(nullvalue) to "default" 
+will return "0" for numeric null data types (integer, float,
+and money) and a 
+null string for all other data types.  Nullvalue is initially set to "default".
+.sp
+.TP
+.B fixedchar
+.br
+can be set by the programmer to indicate that character datatypes 
+returned by sybnext should not have trailing spaces trimmed from the 
+value.  Setting sybmsg(fixedchar) to "1", "true", or  "yes" will 
+ensure that all trailing
+spaces are returned.  The default value ("") will cause trailing
+spaces to be trimmed.
+.sp
+.TP
+.B binaryashex
+.br
+can be set by the programmer to indicate that binary data types (binary, image)
+should be converted to hexstrings. 
+Setting sybmsg(binaryashex) to "1", "true", or  "yes" will 
+convert binary types to hex strings.
+The default value ("") will cause binary data to be stored bit-for-bit.
+.sp
+.TP
+.B dateformat
+.br
+can be set by the programmer to indicate formatting for date data types.
+The dateformat string can contain substitution values or literals.
+Substitions are made from the list below; other literals are copied
+verbatim.  The default value is null, which will format dates a default format.
+.RS
+.TP
+.B YYYY
+.br
+four digit year, 1900-
+.TP
+.B YY
+.br
+two digit year, 00-99
+.TP
+.B MM
+.br
+two digit month, 1-12
+.TP
+.B MONTH
+.br
+name of month, January-December
+.TP
+.B MON
+.br
+month abbreviation, Jan-Dec
+.TP
+.B DD
+.br
+two digit day, 1-31
+.TP
+.B hh
+.br
+two digit hour, 0-23
+.TP
+.B mm
+.br
+two digit minute, 0-59
+.TP
+.B ss 
+.br
+two digit second, 0-59
+.TP
+.B ms
+.br
+three digit millisecond, 0-999
+.TP
+.B dy
+.br
+three digit day of year, 0-365
+.TP
+.B dw
+.br
+one digit day of week, 1-7 (Mon-Sun)
+.RE
+.sp
+.TP
+.B bgevents
+.br
+can be set by the programmer to allow or disallow the processing of
+Tcl events while Sybtcl is waiting for server response.
+Events are processed during Sybtcl commands that may wait on server
+responses:  sybsql (without -async option), sybnext (with commands option),
+sybwritetest, and sybreadtext.
+The default value is "idletasks".  Possible values are:
+.RS
+.TP 
+.B idletasks
+.br
+Process only events that have been deferred, such as display updates.
+Similar to the Tcl \fBupdate idletasks\fR command.
+.TP
+.B all
+.br
+Process all events.
+Similar to the Tcl \fBupdate\fR command.
+.TP
+.B none
+.br
+Do not process events during Sybtcl commands.  
+.RE
+.sp
+.TP
+.B bgpollinterval
+.br
+can be set by the programmer to specify the polling interval 
+in milliseconds while
+processing background events.  The value specified must be an integer
+between 1 and 1000.  The default bgpollinterval value is 200.  Smaller values
+causes the polling loop to execute more frequently, which may cause
+higer CPU usage. 
+.sp
+.TP
+.B maxtext
+.br
+can be set by the programmer to limit the amount of text or image data
+returned by sybnext and sybreadtext.  The default is 32768 bytes.  
+The maximum is 2147483647 bytes.  Any value less than or equal to zero
+is ignored.  Any change to maxtext becomes effective on the next call to
+sybsql.  See notes on maxtext usage with sybnext.
+.sp
+.TP
+.B handle
+.br
+indicates the handle of the last sybtcl command.  Handle is set on every
+sybtcl command (execpt where an invalid handle is used.)
+.sp
+.TP
+.B isnull
+.br
+is a list of binary elements corresponding to each column element returned
+by sybnext.  Each element is set to "1" if the value is null, "0" if
+the value is not null.
+.sp
+.TP
+.B nextrow
+.br
+indicates the results of the last SQL command and subsequent next row
+processing.  Nextrow is set by sybsql and sybnext.  Possible values are:
+.RS
+.TP
+.B REG_ROW
+.br
+at least one row is available after execution of sybsql, or the results of
+sybnext returned a row as a Tcl list.
+.TP
+.B n
+.br
+an integer number, which indicates that last row retrieved by sybnext returned
+a compute row.  The value is the \fIcomputeid\fR, which is the relative
+compute statement in the last SQL command executed with sybsql.
+.TP
+.B NO_MORE_ROWS
+.br
+indicates that sybsql executed successfully 
+but no rows are available, or the results of 
+sybnext did not return a row.  Sybnext will return a null string.
+Return values from a stored procedure, if any,
+are available at this time.
+If more results are expected, a subsequent
+execution of sybnext will return the first row, if any, from the next 
+set of results.
+.TP
+.B PENDING
+.br
+indicates the last execution of sybsql was made with the 
+"-async" flag.  Sybpoll may be used to check the status of results.
+Sybnext will block until results are available.  When sybsql is
+executed with -async, any errors will not be available until the 
+first execution of sybnext.
+.TP
+.B FAIL
+.br
+indicates that a server error has occurred.  Appropriate error codes and
+messages are set in the sybmsg indices \fIdberr\fR and \fIdberrstr\fR.
+Sybnext will return a null string.
+If more results are expected, a subsequent
+execution of sybnext will return the first row, if any, from the next 
+set of results.
+.TP
+.B NO_MORE_RESULTS
+.br
+indicates that the final set of results
+from the last execution of sybsql have been processed by sybnext.
+.RE
+.TP
+.B retstatus
+.br
+indicates the return code after a stored procedure has executed.  Retstatus
+is set by sybsql or sybnext, whenever a the results
+of a stored procedure are available.
+.TP
+.B collengths
+.br
+is a Tcl list of the lengths of the columns returned by sybcols.  Numeric
+columns (Sybase datatypes int, float, etc.) are given by the internal 
+data lengths (e.g., int has a length of 4),  character columns lengths are
+the maximum of any row returned.  Collengths is only set by sybcols.
+.TP
+.B coltypes
+.br
+is a Tcl list of the types of the columns returned by sybcols.  
+Coltypes is only set by sybcols.  Possible types returned are:
+char, text, binary, image, tinyint, smallint, int, float, real,
+numeric, decimal, bit, money, smallmoney, datetime, smalldatetime.
+Varchar and varbinary data types are reported as char and binary.
+.TP
+.B msgno
+.br
+indicates the message number from a Sybase Server message.
+Can be set by any sybtcl command.  Refer to Sybase documentation for 
+interpretation.
+Since each sybtcl command
+may invoke several DB-Lib routines, there is a possiblity that
+several messages may be received from the server.  Sybtcl will 
+concatenate all server message numbers received during one sybtcl command, 
+separating individual numbers by newlines.
+.TP
+.B msgtext
+.br
+the message text associated with msgno.  Since each sybtcl command
+may invoke several DB-Lib routines, there is a possiblity that
+several messages may be received from the server.  Sybtcl will 
+concatenate all server messages received during one sybtcl command, 
+separating individual messages by newlines.
+Output from Transact-SQL PRINT statments are collected in msgtext.
+.TP
+.B severity
+.br
+indicates the severity level from a Sybase Server message or DB-Library routine.
+Can be set by any sybtcl command.  Refer to Sybase documentation for 
+interpretation.
+.TP
+.B svrname
+.br
+indicates the name of the Sybase Server that generated a message.
+Can be set by any sybtcl command.  
+.TP
+.B procname
+.br
+indicates the name of the stored procedure that generated a message.
+Only set when a stored procedure was executed.  Set by sybsql.  
+.TP
+.B line
+.br
+indicates the line number of the SQL command or stored procedure that
+generated a message.  Set by sybsql.  
+.TP
+.B dberr
+.br
+indicates the error number generated by a DB-Library routine.
+Can be set by any sybtcl command.  Refer to Sybase documentation for 
+interpretation.
+.TP
+.B dberrstr
+.br
+the error text associated with dberr. 
+.TP
+.B oserr
+.br
+indicates an operating system specific error number associated with a 
+DB-Library error.
+Can be set by any sybtcl command.  
+.TP
+.B oserrstr
+.br
+the error text associated with oserr.
+.sp
+.TP
+.B dblibinfo
+.br
+is set to options that were in effect with Sybtcl was compiled.  Possible
+values are: "system10" if linked with Sybase System 10 DB-Libs or higher, 
+"ctcompt" if compiled with the CT-Lib compatiblity library.
+.sp
+.SH NOTES
+.P
+Tcl errors can also be raised by any sybtcl command if a command's internal
+calls to DB-Library routines fail.  Sybtcl will return the name of the 
+DB-Lib routine that caused an error.
+.P
+When executing a stored procedure with sybsql, be sure to include in the SQL
+commands a "DECLARE" statement for local variables, and specify the local
+variables as "OUTPUT" on the "EXEC" statement.
+Otherwise, sybretval will not be able to
+access the return values.  If the return variable names are 
+to be accessed by
+sybcols, use the assignment form of "EXEC", e.g.:\fB
+.IP
+declare @local-var datatype
+.br
+exec stored-proc @proc-var-name = @local-var output\fR
+.br
+.sp
+.P
+If a stored procedure is executed with sybsql, and the procedure uses
+Transact-SQL "PRINT" statements, check $sybmsg(msgtext) before executing
+any other Sybtcl commands.  Otherwise, the PRINT output will be lost on
+the next command.  Multiple PRINT statements are separated by newlines
+in $sybmsg(msgtext).
+.P
+Sybtcl error and message handlers simply populate values in the sybmsg array.
+The error handler always returns INT_CANCEL.
+.P
+To use the \fB-nolog\fR feature of sybwritetext, the following option
+must have been set on the database:
+.P
+	\fBsp_dboption 'yourdbname', 'select into/bulkcopy', 'true'\fR
+.sp
+.P
+The limit of the number of simultaneous connections is artificial, based on
+a fixed table in sybtcl.  Change the source 
+.I #define SYBTCLPROCS
+if more are needed.  
+.sp
+The maximum amount of TEXT or IMAGE data returned by sybnext is ultimately
+dependent on sybtcl's ability to malloc() \fImaxtext\fR bytes of memory
+for each TEXT or IMAGE column retrieved.  Setting
+sybmsg(maxtext) to too high a value may cause core dumps
+or memory shortages.  Sybreadtext does
+not malloc() an area to hold the entire value; instead it retrieves TEXT and
+IMAGE in chunks and writes to a file.  While maxtext limits the amount of data
+retrieved by sybreadtext, it shouldn't cause memory shortages as sybnext might.
+.sp
+When using sybnext with the optional tcl-commands argument, a substantial
+performance improvement can be realized by not using the substitution
+values (@1, @2, etc.)  Instead, specify the substitution character as a 
+null string {}, and use the tclvar-columnum argument pairs.
+.sp
+.SH ENVIRONMENT VARIABLES
+.TP
+DSQUERY
+.br
+The default Sybase server.
+.TP
+SYBASE
+.br
+The home directory for Sybase files.
+.sp
+.SH FILES
+.TP
+$SYBASE/interfaces - definitions for Sybase Servers.
+.sp
+.SH AUTHOR
+Tom Poindexter, Denver Colorado <tpoindex@nyx.net>, 
+Currently maintained by D. J. Hagberg <dhagberg@millibits.com>.
+Version 3.0 released December, 2000.
+The ?commands? option to sybnext was borrowed from my work with Oratcl,
+a Tcl interface to the Oracle database product.
+.br
+http://sybtcl.sourceforge.net/
+.br
+http://www.nyx.net/~tpoindex
+

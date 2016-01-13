@@ -1,0 +1,54 @@
+#!/usr/local/bin/tcl
+
+# get_blurbs
+#
+# Copyright 1992, Tom Poindexter
+#
+# this tcl script extracts text columns from the "pubs" database
+# to demonstrate the sybreadtext command.
+# the default server is used (DSQUERY).
+# not much error checking is done.
+
+# usage: get_blurbs userid password
+#
+
+global sybmsg
+
+set uid [lindex $argv 0]
+set pw  [lindex $argv 1]
+
+# normally, i would catch errors from sybconnect
+# in this case, just let tcl print an error & exit
+
+set syb [sybconnect $uid $pw]
+
+sybuse $syb pubs
+
+set all_ids "\n\nAuthor IDs\n"
+sybsql $syb "select au_id from blurbs"
+set row [sybnext $syb]
+while {[string compare $sybmsg(nextrow) REG_ROW] == 0} {
+  append all_ids "[lindex $row 0]\n"
+  set row [sybnext $syb]
+}
+
+puts stdout $all_ids
+puts stdout "\nEnter the ID of the blurb (null to quit)..." nonewline
+while {[gets stdin auid]} {
+  set result [sybsql $syb "select copy from blurbs where au_id = '$auid'"]
+  if {[string compare $result REG_ROW] == 0} {
+    sybreadtext $syb /tmp/syb.$uid
+    system "more /tmp/syb.$uid"
+    unlink -nocomplain /tmp/syb.$uid
+  } else {
+    puts stdout "oops. $id not found."
+  }
+  puts stdout $all_ids
+  puts stdout "\nEnter the ID of the blurb (null to quit)..." nonewline
+}
+
+sybclose $syb
+
+exit
+
+# finis

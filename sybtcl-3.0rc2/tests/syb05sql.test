@@ -1,0 +1,313 @@
+# syb05sql.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+# 
+# exercise various combinations of sybsql and sybnext
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+test sybsql-1.1 {sybsql: no rows returned} {
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 0"
+} {NO_MORE_ROWS}
+
+test sybsql-1.2 {sybsql: no results returned} {
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 0"
+  sybnext $syb_hand
+  set sybmsg(nextrow)
+} {NO_MORE_RESULTS}
+
+test sybsql-1.3 {sybsql: one row returned} {
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint = 0"
+  set cnt 0
+  sybnext $syb_hand {incr cnt}
+  set cnt
+} {1}
+
+test sybsql-1.4 {sybsql: 30 rows returned} {
+  sybsql $syb_hand "select * from sybtcl___tests"
+  set cnt 0
+  sybnext $syb_hand {incr cnt}
+  set cnt
+} {30}
+
+test sybsql-1.5 {sybsql: multiple result sets} {
+  sybsql $syb_hand "select * from sybtcl___tests 
+		    select * from sybtcl___tests"
+  set cnt1 0
+  set cnt2 0
+  sybnext $syb_hand {incr cnt1}
+  sybnext $syb_hand {incr cnt2}
+  format "$cnt1 $cnt2"
+} {30 30}
+
+test sybsql-1.6 {sybsql: multiple result sets with one compute row (buffered row)} {
+  sybsql $syb_hand "select * from sybtcl___tests 
+		    compute sum(v_smallint)"
+  set cnt1 0
+  set cnt2 0
+  sybnext $syb_hand {incr cnt1}
+  sybnext $syb_hand {set cnt2 @1}
+  format "$cnt1 $cnt2 $sybmsg(nextrow)"
+} {30 435 NO_MORE_ROWS}
+
+test sybsql-1.7 {sybsql: multiple result sets with two compute rows (buffered row)} {
+  sybsql $syb_hand "select * from sybtcl___tests 
+		    compute sum(v_smallint)
+		    compute min(v_smallint), max(v_smallint)
+		    select * from sybtcl___tests
+		    compute avg(v_smallint)"
+  set cnt1 0
+  set cnt2 0
+  set cnt3 0
+  set cnt4 0
+  set cnt5 0
+  set cnt6 0
+  sybnext $syb_hand {incr cnt1}
+  sybnext $syb_hand {set cnt2 @1}
+  sybnext $syb_hand {set cnt3 @1; set cnt4 @2}
+  sybnext $syb_hand {incr cnt5}
+  sybnext $syb_hand {set cnt6 @1}
+  sybnext $syb_hand 
+  format "$cnt1 $cnt2 $cnt3 $cnt4 $cnt5 $cnt6 $sybmsg(nextrow)"
+} {30 435 0 29 30 14 NO_MORE_RESULTS}
+
+test sybsql-1.8 {sybsql: sybnext commands with break} {
+  sybsql $syb_hand "select * from sybtcl___tests"
+  set cnt1 0
+  set i 0
+  sybnext $syb_hand {incr cnt1; incr i; if {$i>22} {break}}
+  sybnext $syb_hand {incr cnt1}
+  format "$cnt1 $sybmsg(nextrow)"
+} {30 NO_MORE_ROWS}
+
+test sybsql-1.9 {sybsql: sybnext correct number of rows and columns} {
+  global have_sys10types
+  if {$have_sys10types} {
+    set numCols 18
+  } else {
+    set numCols 16
+  }
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 2"
+  set cnt1 0
+  set cnt2 0
+  set cnt3 0
+  set cnt4 0
+  set cnt5 0
+  set cnt6 0
+  set row [sybnext $syb_hand]
+  set cnt1 [expr {$numCols == [llength $row]}]
+  set cnt2 $sybmsg(nextrow)
+  set row [sybnext $syb_hand]
+  set cnt3 [expr {$numCols == [llength $row]}]
+  set cnt4 $sybmsg(nextrow)
+  set row [sybnext $syb_hand]
+  set cnt5 [expr {$numCols == [llength $row]}]
+  set cnt6 $sybmsg(nextrow)
+  format "$cnt1 $cnt2 $cnt3 $cnt4 $cnt5 $cnt6"
+} {1 REG_ROW 1 REG_ROW 0 NO_MORE_ROWS}
+
+test sybsql-1.10 {sybsql: sybnext with commands number substitution columns} {
+  global have_sys10types
+  if {$have_sys10types} {
+    set numCols 18
+  } else {
+    set numCols 16
+  }
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 2"
+  set cnt1 0
+  set cnt2 0
+  sybnext $syb_hand {set cnt1 [llength @0]}
+  set cnt2 [expr {$numCols == $cnt1}]
+  set cnt2
+} {1}
+
+test sybsql-1.11 {sybsql: sybnext with commands number substitution columns} {
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 2"
+  set cnt1 0
+  sybnext $syb_hand {set cnt1 [llength [list @1 @2 @3] ]}
+  set cnt1
+} {3}
+
+test sybsql-1.12 {sybsql: sybnext with commands alternate substitution character} {
+  global have_sys10types
+  if {$have_sys10types} {
+    set numCols 18
+  } else {
+    set numCols 16
+  }
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 2"
+  set cnt1 0
+  set cnt2 0
+  sybnext $syb_hand {set cnt1 [llength %0]} {%}
+  set cnt2 [expr {$numCols == $cnt1}]
+  set cnt2
+} {1}
+
+test sybsql-1.13 {sybsql: sybnext with commands alternate substitution character} {
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 2"
+  set cnt1 0
+  sybnext $syb_hand {set cnt1 [llength [list %1 %2 %3] ]} {%}
+  set cnt1
+} {3}
+
+test sybsql-1.14 {sybsql: sybnext with commands no sub char } {
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 2"
+  set cnt1 0
+  sybnext $syb_hand {set cnt1 [llength @0]} {}
+  set cnt1
+} {1}
+
+test sybsql-1.15 {sybsql: sybnext with commands tclvars as additional parms } {
+  global have_sys10types
+  if {$have_sys10types} {
+    set numCols 18
+  } else {
+    set numCols 16
+  }
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 2"
+  set cnt1 0
+  sybnext $syb_hand {set cnt1 [llength $row]} {} row 0
+  set cnt2 [expr {$numCols == $cnt1}]
+  set cnt2
+} {1}
+
+test sybsql-1.16 {sybsql: sybnext with commands tclvars as additional parms } {
+  global have_sys10types
+  if {$have_sys10types} {
+    set numCols 18
+  } else {
+    set numCols 16
+  }
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  set cnt2 0
+  set cnt3 0
+  sybnext $syb_hand {
+    incr cnt1 $col1; set cnt2 $col2; set cnt3 $col1} {} col3 3 col2 2 col1 1
+  format "$cnt1 $cnt2 $cnt3"
+} {3 2 2}
+
+test sybsql-1.17 {sybsql: sybnext with commands tclvars as list} {
+  global have_sys10types
+  if {$have_sys10types} {
+    set numCols 18
+  } else {
+    set numCols 16
+  }
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 2"
+  set cnt1 0
+  sybnext $syb_hand {set cnt1 [llength $row]} {} {row 0}
+  set cnt2 [expr {$numCols == $cnt1}]
+  set cnt2
+} {1}
+
+test sybsql-1.18 {sybsql: sybnext with commands tclvars as list} {
+  global have_sys10types
+  if {$have_sys10types} {
+    set numCols 18
+  } else {
+    set numCols 16
+  }
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  set cnt2 0
+  set cnt3 0
+  sybnext $syb_hand {
+    incr cnt1 $col1; set cnt2 $col2; set cnt3 $col1} {} {col3 3 col2 2 col1 1}
+  format "$cnt1 $cnt2 $cnt3"
+} {3 2 2}
+
+test sybsql-1.19 {sybsql: sybnext with commands substituion and tclvars} {
+  global have_sys10types
+  if {$have_sys10types} {
+    set numCols 18
+  } else {
+    set numCols 16
+  }
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  set cnt2 0
+  set cnt3 0
+  sybnext $syb_hand {
+    set cnt1 [llength @0]; set cnt3 $col1} {@} {col3 3 col2 2 col1 1}
+  set cnt2 [expr {$numCols == $cnt1}]
+  format "$cnt2 $cnt3"
+} {1 2}
+
+test sybsql-1.19 {sybsql: no results returned, sql update} {
+  sybsql $syb_hand "update sybtcl___tests set v_smallint=0 where v_smallint <0"
+} {NO_MORE_ROWS}
+
+test sybsql-1.20 {sybsql: no results returned, sql create index} {
+  sybsql $syb_hand "create index sybtcl___tests_idx1 on sybtcl___tests(v_int)"
+} {NO_MORE_ROWS}
+
+test sybsql-1.21 {sybsql: no results returned, sql drop index} {
+  sybsql $syb_hand "drop index sybtcl___tests.sybtcl___tests_idx1"
+} {NO_MORE_ROWS}
+
+test sybsql-1.22 {sybsql: sybnext with commands quoted substitution character} {
+  sybsql $syb_hand "select v_smallint from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  sybnext $syb_hand {set cnt1 [string length @@]}
+  set cnt1
+} {1}
+
+test sybsql-1.23 {sybsql: sybnext with commands quoted substitution character} {
+  sybsql $syb_hand "select v_smallint from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  sybnext $syb_hand {set cnt1 [string length %%]} {%}
+  set cnt1
+} {1}
+
+test sybsql-1.24 {sybsql: sybnext with commands quoted substitution character} {
+  sybsql $syb_hand "select v_smallint from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  sybnext $syb_hand {set cnt1 [string length @@]} {%}
+  set cnt1
+} {2}
+
+test sybsql-1.25 {sybsql: sybnext with commands non-numeric substitution character} {
+  sybsql $syb_hand "select v_smallint from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  sybnext $syb_hand {set cnt1 [string length %b]} {%}
+  set cnt1
+} {2}
+
+test sybsql-1.26 {sybsql: sybnext with commands invalid tclvar pairs} {
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  catch {sybnext $syb_hand {set cnt1 $col1]} {} col1 1 col2} res
+  set res
+} {: sybnext: odd number of varname column elements}
+
+test sybsql-1.27 {sybsql: sybnext with commands invalid tclvar pair list} {
+  sybsql $syb_hand "select * from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  catch {sybnext $syb_hand {set cnt1 $col1]} {} {col1 1 col2} } res
+  set res
+} {: sybnext: odd number of varname column elements}
+
+test sybsql-1.28 {sybsql: sybnext with commands invalid column substitution} {
+  sybsql $syb_hand "select v_smallint from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  catch {sybnext $syb_hand {set cnt1 @2} } res
+  set res
+} {0sybnext: @column number or tclvar column number execeeds number of result columns}
+
+test sybsql-1.29 {sybsql: sybnext with commands invalid tclvar substitution} {
+  sybsql $syb_hand "select v_smallint from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  catch {sybnext $syb_hand {set cnt1 $col2]} {} col2 2 }  res
+  set res
+} {0sybnext: @column number or tclvar column number execeeds number of result columns}
+
+test sybsql-1.30 {sybsql: sybnext with commands invalid tclvar substitution} {
+  sybsql $syb_hand "select v_smallint from sybtcl___tests where v_smallint < 3"
+  set cnt1 0
+  catch {sybnext $syb_hand {set cnt1 $col2]} {} {col2 2} }  res
+  set res
+} {0sybnext: @column number or tclvar column number execeeds number of result columns}
+
+

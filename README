@@ -1,0 +1,309 @@
+Sybtcl -  Tcl interface to Sybase database server
+
+ * Copyright 1992 Tom Poindexter and U S WEST Enhanced Services, Inc.
+ *
+ * Permission to use, copy, modify, and distribute this software and its
+ * documentation for any purpose and without fee is hereby granted, provided
+ * that the above copyright notice appear in all copies.  
+ * Tom Poindexter and U S WEST make no representations about the suitability 
+ * of this software for any purpose.  It is provided "as is" without express or
+ * implied warranty.  By use of this software the user agrees to 
+ * indemnify and hold harmless Tom Poindexter and U S WEST from any 
+ * claims or liability for loss arising out of such use.
+ *
+ *-----------------------------------------------------------------------
+ * Version 1.0  June, 1992
+ * Version 1.1  August, 1992
+ * Version 1.2  October, 1992
+ * Version 1.3  May, 1993
+ * Version 2.0  November, 1993
+ * Version 2.1  February, 1994
+ * Version 2.11 April, 1994
+ * Version 2.2  October, 1994
+ * Version 2.3  August, 1995
+ * Version 2.4  December, 1996
+ * Version 2.5  November, 1997
+ *-----------------------------------------------------------------------
+ * Version 3.0  December, 2000
+ * D. J. Hagberg, maintainer            Tom Poindexter, author
+ * Broomfield, Colorado                 Denver, Colorado
+ * dhagberg@millibits.com               tpoindex@nyx.net
+
+
+WHAT IS SYBTCL?
+
+Sybtcl is an extension to Tool Command Language (Tcl) that provides access
+to a Sybase Database server.  Sybtcl adds additional Tcl commands that 
+login to a SQL Server, pass SQL code, read results, etc.  Sybtcl was inspired
+by similar tools written for Perl (sybperl, oraperl) but was written from
+scratch instead of borrowing on the work of either Perl extension.
+
+Sybtcl features:
+  -supports multiple connections to the same or different SQL Servers
+  -provides "nextrow" processing for regular and compute return rows
+  -converts results to strings and returns rows as Tcl lists
+  -allows user defined null values to be returned
+  -stored procedures can be executed and return values accessed
+  -accesses column names, lengths, and datatypes of rows & return values
+  -provides feedback of SQL Server and DB-Lib messages
+  -reads/writes text or image datatypes to files or variables
+  -asynchronous queries with either polling or event processing
+
+
+Sybtcl does not:
+  -perform row buffering or browse mode
+  -bulk copies
+  -support two phase commit on multiple servers
+  
+
+WHERE TO GET SYBTCL
+
+http://sybtcl.sourceforge.net/
+
+And additionally from the Neosoft site:
+	
+ftp://ftp.neosoft.com/pub/tcl/sorted/databases/sybtcl-3.0/
+or
+http://www.neosoft.com/tcl/ftparchive/sorted/databases/sybtcl-3.0/
+
+
+HOW TO BUILD SYBTCL
+
+See the INSTALL file for instructions on how to build sybtcl from source.
+
+
+ACKNOWLEDGEMENTS
+
+	John Ousterhout (john.ousterhout@scriptics.com) for Tcl and Tk -
+	    wonderful software in my opinion.
+
+	Karl Lehenbauer (karl@NeoSoft.com) and 
+	    Mark Diekhans (markd@Grizzly.com) for Extended Tcl -
+	    more good stuff.
+
+	Michael Peppler (mpeppler@datamig.com) for sybperl, which gave me
+	    the inspiration to write Sybtcl.  
+
+
+REQUIREMENTS
+
+Since Sybtcl is an extension to Tcl, you should already have Tcl, or be
+prepared to get it via Ftp [sites listed below].
+
+Of course, you must also have access to a Sybase Databaser Server.  
+Additionally, you must have the Sybase Open Client (aka "DB-Library") package 
+that provides header files and object libraries;  Sybtcl must be linked 
+with libsybdb -- typically dynamically as a .dll, .so.
+
+Sybtcl supports building a dynamic load library on
+systems that support dynamic loading.  If you build static libraries and
+executables, I recommend building with Extended Tcl.
+
+The specific software versions I used:
+
+        Tcl - 8.3.2         http://download.sourceforge.net/tcl/tcl8.3.2.tar.gz
+        Tk  - 8.3.2         http://download.sourceforge.net/tcl/tk8.3.2.tar.gz
+                            also avaible at
+			    http://www.scriptics.com
+			    http://www.tcltk.com/
+			    http://www.neosoft.com/tcl
+
+        Extended Tcl - 8.2.0  ftp.neosoft.com
+                                /pub/tcl/TclX/tclX8.2.0.tar.gz
+
+
+	Sybase SQL Server - 4.x, System 10, or System 11  
+	Sybase Open Client / DB-Lib (CT-Lib in a pinch, see INSTALL)
+
+	see the newsgroup comp.lang.tcl for general Tcl discussion and
+	the Tcl Frequently Asked Questions.
+
+
+I've built Sybtcl in Sequent PTX 1.3 (System V 3.2), SunOS 4.1.x, Solaris 2.5,
+Dec Unix, HPUX 9.x/10.x, Linux/ELF (RedHat 5.2), and 
+Windows NT 4.0/95/VC++ 4.0, MacOS 8.1/MPW.
+
+Other users have reported successful compiles on: 
+SGI Irix
+IBM AIX
+SCO Unix
+
+
+LINUX 
+
+You can now get Sybase Adaptive Server Enterprise 11.0.3 for *free*,
+including the necessary DB-Lib.  Get yours at:
+	http://www.sybase.com/linux/ase/
+	http://www.redhat.com
+	http://www.caldera.com
+	http://www.suse.com
+
+
+WINDOWS NT/95/98/00 AND MACINTOSH
+
+Windows:
+A DLL for Windows NT/95 is supplied in the ./win directory. 
+Run 'tclsh83 install.tcl' to install.
+
+See the win/README.win file for more information.
+
+Please note!!   I'm not suppling a .zip file for Windows.
+                The popular WinZip program can unpack .tar.gz files.  Save the
+                distribution file on your Windows machine, 
+                using .tgz instead of .tar.gz for best results. 
+
+Windows users must have a Sybase client installation on their machines.
+I've built the DLL with Open Client 11.5, but it should build with anything
+10.0.3 and higher.  The DLL was compiled with Microsoft VC 4.0.
+
+
+Macintosh:
+[Currently, I have no way to compile a binary for Sybtcl on the Mac
+as I do not have a Mac port of OpenClient available, nor a decent MPW 
+setup.  If anyone can offer this service, please let me know and I will
+be happy to include it in this distro  -=- D. J. <dhagberg@millibits.com>]
+
+Macintosh users must have a Sybase client installation on their machines.
+I've built the shared lib with Open Client 10.0.4, using the 'CFM (FAT)'
+libraries.  The shared lib can be compiled with Apple's MPW MrC compiler.
+You can get Apple MPW for *free* at:
+http://www.apple.com/developer
+http://developer.apple.com/sdk/index.html
+
+I didn't make a 68k version.  Let me know if you get a 68k version working.
+
+
+SAMPLES
+
+Some samples are included.
+
+In particular, the "wisqlite" (Windowing ISQL) program 
+is a handy replacement for Sybase's Isql in an X11 environment.
+Also of special interest is 'sp_who', a graphical version of the Sybase
+'sp_who' stored procedure, and 'sybmon', a simple Sybase server monitor.
+
+See ./samples/README.samples plus each file's comments and code.
+
+
+MAN PAGE
+
+You're in luck! I've written one.  See the ./doc directory for manual pages
+in text, html, and postscript.
+
+
+OTHER DOCUMENTATION
+
+Sybtcl is explained in greater detail in "Tcl/Tk Tools", edited by Mark 
+Harrison, and published by O'Reilly and Associates.  "Tcl/Tk Tools" is 
+a new book that covers many of the popular Tcl extensions, written by
+the authors of each extension (Tom wrote the chapters on Sybtcl and Oratcl.)
+1st Edition published September 1997, ISBN: 1-56592-218-2
+See your local bookstore, or try: 
+	http://www.softpro.com
+	http://www.amazon.com
+	http://www.ora.com
+	http://www.barnesandnoble.com
+
+
+BUG REPORTS
+
+Comments, suggestions, et.al., should be mailed to me 
+or posted to comp.lang.tcl if general enough nature.  
+Hell, you can even mail to me if you like Sybtcl!
+
+Mail bug reports to:        dhagberg@millibits.com and/or tpoindex@nyx.net
+
+Please ALWAYS INCLUDE:  
+	-version of Sybtcl
+	-version of Tcl, Tk, and TclX
+	-version of Sybase server and DB-Libary
+	-version of your operating system
+	-switches used with configure (see config.status)
+	-compiler used, stock cc or Gcc
+	-samples of SQL or Sybtcl code causing problems
+	-relevant database table definitions, views, procedures
+
+If you post a question or bug report to comp.lang.tcl, I may not see it,
+so please copy me also.
+
+
+SYBTCL WWW PAGE
+
+I keep terse, but usually up to date information at: 
+	http://www.nyx.net/~tpoindex
+
+
+TCL DATABASE MAILING LIST
+ 
+A mailing list is available for specific discussions about using Tcl with
+databases, including Oratcl, Sybtcl, etc.  Feel free to join and mail to the
+list.  The list is hosted by De Clarke.
+ 
+To subscribe to this list send mail to
+ 
+        listserv@ucolick.org
+ 
+and in the body of the message write
+ 
+        subscribe tcldb
+ 
+To unsubscribe... (well, you get the idea).
+ 
+Please remember to write to tcldb-owner with problems about the
+list itself, or to postmaster@ucolick.org if you have difficulties
+getting through to the tcldb-owner address.  Please do not send
+subscribe and unsubscribe messages to the list itself.
+
+
+INSTALLATION
+
+Quickie install instructions:
+
+        cd unix
+	./configure --prefix=/same/prefix/path/as/with/tcl/configure  \
+		    --exec-prefix=/same/exec-prefix/path/as/with/tcl/configure 
+	make
+	make install
+	make install-tools
+
+Didn't work?  You'll have to read the INSTALL file.  Maybe you should read it
+anyway.
+
+NOTE!!! I strongly advise that you build Tcl with the '--enable-shared' option.
+Sybtcl uses information that Tcl's configure finds, particularly information
+about compiling and linking for dynamic shared libraries.  Sybtcl by 
+default builds a shared library.  See the INSTALL file for additional notes.
+
+
+TEST SUITE
+
+A test suite is included.  You will need access to a Sybase server, with
+permission to create tables and stored procedures.  You can run the test suite
+after building Sybtcl by running:
+
+	make tests
+
+
+ADDITIONAL APPS
+
+De Clark has built some wonder applications using Sybtcl, including the
+feature-rich full version of Wisql.  Visit her site at:
+
+    http://www.ucolick.org/~de/Tcl/
+
+and visit the UCO Lick Tcl/Tk source code link to view and download all
+these applications.
+
+
+OTHER
+
+Try out the Sybtcl C API.  It allows your C programs to access Sybase
+using the Sybtcl model. It's experimental; please mail to me if
+it works for you, or if you have improvements.  See ./sybtcl-capi/*
+
+See the file CHANGES for changes in versions of Sybtcl.
+
+
+
+-finis-
+

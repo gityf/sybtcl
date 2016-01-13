@@ -1,0 +1,410 @@
+###############################################################################
+#
+# Sybtcl-3.0
+# Makefile.in for Sybtcl configure
+#
+# Tom Poindexter 
+
+SYBTCL_VERSION = @SYBTCL_VERSION@
+SYBTCL_LIBVER  = @SYBTCL_LIBVER@
+
+SHELL = /bin/sh
+
+###############################################################################
+#
+# set the following defines as needed: 
+
+prefix       = @TCL_PREFIX@
+exec_prefix  = @TCL_EXEC_PREFIX@
+
+# alternative defs
+#prefix      = @prefix@
+#exec_prefix = @exec_prefix@
+
+#------------------------------------------------------------------------------
+# define where Sybtcl should put binaries, libraries, and mapages
+#
+
+BIN_DIR      = $(exec_prefix)/bin
+LIB_DIR      = $(exec_prefix)/lib
+MAN_DIR      = $(prefix)/man
+MANN_DIR     = $(MAN_DIR)/mann
+
+#------------------------------------------------------------------------------
+# define where Tcl include and libraries are located
+# Sybtcl assumes that Tcl, Tk (and possibly Extended Tcl) are installed
+# in the same locations
+
+TCL_INC_DIR  = @TCL_INC_DIR@
+TCL_LIB_DIR  = @TCL_LIB_DIR@
+
+#------------------------------------------------------------------------------
+# define Tcl, Tk, TclX libraries and extra libs
+
+TCL_VERSION   = @TCL_VERSION@
+TK_VERSION    = @TK_VERSION@
+
+TCL_LIB_SPEC  = @TCL_LIB_SPEC@
+TCL_LIBS      = @TCL_LIBS@
+
+TK_LIB_SPEC   = @TK_LIB_SPEC@
+TK_LIBS       = @TK_LIBS@
+TK_XINCLUDES  = @TK_XINCLUDES@
+TK_XLIBSW     = @TK_XLIBSW@
+
+TCLX_LIB_SPEC = @TCLX_LIB_SPEC@
+TCLX_LIBS     = @TCLX_LIBS@
+TCLX_LIB_LOC  = @TCLX_LIB_LOC@
+TCLX_LIB_SEP  = @TCLX_LIB_SEP@
+TKX_LIB_SPEC  = @TKX_LIB_SPEC@
+TKX_LIBS      = @TKX_LIBS@
+
+# grab the versions from TclX, needed to find TclX appinit files
+TCLX_FULL_VERSION = @TCLX_FULL_VERSION@
+TKX_FULL_VERSION  = @TKX_FULL_VERSION@
+
+#------------------------------------------------------------------------------
+# compiler and flags from tcl config, so don't change CC
+# without some thought, otherwise you might break the shared flags.
+ 
+CC                  = @TCL_CC@
+#CC                   = purify -cache_dir=.pure_cache @TCL_CC@
+
+OPT_DEBUG           = -O
+#OPT_DEBUG           = -g -DSYBTCL_MEM_DEBUG -DTCL_MEM_DEBUG
+#OPT_DEBUG           = -g -DSYBTCL_MEM_DEBUG -DSYBTCL_MEM_FULL_DEBUG
+
+TCL_DEFS            = $(OPT_DEBUG) @TCL_DEFS@   @DEFS@
+TCL_LD_FLAGS        = @TCL_LD_FLAGS@
+TCL_SHLIB_SUFFIX    = @TCL_SHLIB_SUFFIX@
+TCL_SHLIB_CFLAGS    = @TCL_SHLIB_CFLAGS@
+TCL_SHLIB_LD        = @TCL_SHLIB_LD@
+TCL_SHLIB_LD_LIBS   = @TCL_SHLIB_LD_LIBS@
+
+#------------------------------------------------------------------------------
+# define names for Sybtcl tclsh/tcl executable
+
+TCL_EXEC   = tclsh
+TCLX_EXEC  = tcl
+
+#------------------------------------------------------------------------------
+# define name for Sybtcl wish/wishx executable
+
+WISH_EXEC  = wish
+WISHX_EXEC = wishx
+
+#------------------------------------------------------------------------------
+# define names for Sybtcl library files, static and shared
+
+LIB_SYBTCL    = libSybtcl$(SYBTCL_LIBVER).a
+LNK_SYBTCL    = -lSybtcl$(SYBTCL_LIBVER)
+LIB_SH_SYBTCL = libSybtcl$(SYBTCL_LIBVER)$(TCL_SHLIB_SUFFIX)
+
+#------------------------------------------------------------------------------
+# define where Sybase libraries are located
+
+SYBASE       = @SYBASE@
+
+SYB_INC      = $(SYBASE)/include
+SYB_CCOPTS   = -I$(SYB_INC)
+SYB_LIB_DIR  = $(SYBASE)/lib
+SYB_LIB      = @SYB_LIB@
+SYB_SH_LIB   = @SYB_SH_LIB@
+SYB_SYS_LIBS = @SYB_SYS_LIBS@
+
+# if using ctlib compatibility, define these
+CTCOMPATINC  = @CTCOMPATINC@
+CTCOMPATOBJ  = @CTCOMPATOBJ@
+CTCOMPATSHO  = @CTCOMPATSHO@
+
+
+#------------------------------------------------------------------------------
+# OTHER_LD_SEARCH_FLAGS so that dynamic loader will look for Sybase libraries
+# NOTE: these are hacked from TCL_LD_SEARCH_FLAGS, and may need tweaking
+# for a particular platform.  LIB_INSTALL_DIR used in tcl7.5,
+# LIB_RUNTIME_DIR used in tcl7.5p1+.  If your linker doesn't like a colon
+# separated path, then you will have to figure out what works, or 
+# possible leave off the second lib.  The inclusion of the Tcl lib dir is
+# for the occasion you are building a static lib, but a shared Tcl lib is
+# found during linking, same with X libs.
+
+LIB_INSTALL_DIR        = @SEARCH_DIRS@
+LIB_RUNTIME_DIR        = @SEARCH_DIRS@
+OTHER_LD_SEARCH_FLAGS  = @OTHER_LD_SEARCH_FLAGS@
+
+# Include tcl's cc flags for dynamic lib search path.  This is in case you
+# are builing a static binary for Sybtcl, but have both static and dynamic
+# tcl libraries, of which the loader will probably prefer the dynamic verisons.
+# Without this flag, the resulting binary won't have lib search information.
+# Note that TCL_LD_SEARCH_FLAGS only works when LIB_RUNTIME_DIR has been set
+# as above.
+
+TCL_LD_SEARCH_FLAGS    = @TCL_LD_SEARCH_FLAGS@
+
+
+#------------------------------------------------------------------------------
+# define man page 
+
+MAN_PAGE = sybtcl.n
+
+
+#------------------------------------------------------------------------------
+# define ranlib command for systems that need it; touch otherwise
+
+RANLIB = @RANLIB@
+
+#------------------------------------------------------------------------------
+# how to install
+
+INSTALL         = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA    = @INSTALL_DATA@
+
+
+#
+# end of defines
+#
+###############################################################################
+
+
+T_EXEC = @T_EXEC@
+W_EXEC = @W_EXEC@
+
+all:  @PROGS@  
+
+#------------------------------------------------------------------------------
+# how to build objects for standard tcl
+
+TCL_APPINIT   = $(TCL_LIB_DIR)/tcl$(TCL_VERSION)/tclAppInit.c
+TK_APPINIT    = $(TCL_LIB_DIR)/tk$(TK_VERSION)/tkAppInit.c
+
+tclAppInit.c:  $(TCL_APPINIT)
+	sed -f sybinit.sed <$(TCL_APPINIT) >tclAppInit.c
+
+tkAppInit.c:   $(TK_APPINIT)
+	sed -f sybinit.sed <$(TK_APPINIT) >tkAppInit.c
+
+tclAppInit.o:  tclAppInit.c
+	$(CC) -c -I$(TCL_INC_DIR) $(TCL_DEFS) tclAppInit.c
+
+tkAppInit.o:   tkAppInit.c
+	$(CC) -c -I$(TCL_INC_DIR) $(TK_XINCLUDES) tkAppInit.c
+
+
+#------------------------------------------------------------------------------
+# how to build objects for neosoft extended tcl
+
+TCLX_APPINIT  = $(prefix)/$(TCLX_LIB_LOC)tclX$(TCLX_LIB_SEP)$(TCLX_FULL_VERSION)/tclXAppInit.c
+TKX_APPINIT   = $(prefix)/$(TCLX_LIB_LOC)tkX$(TCLX_LIB_SEP)$(TKX_FULL_VERSION)/tkXAppInit.c
+
+tclXAppInit.c:	$(TCLX_APPINIT)
+	sed -f sybinit.sed <$(TCLX_APPINIT) >tclXAppInit.c
+
+tkXAppInit.c:	$(TKX_APPINIT)
+	sed -f sybinit.sed <$(TKX_APPINIT)  >tkXAppInit.c
+
+tclXAppInit.o:	tclXAppInit.c
+	$(CC)  -c -I$(TCL_INC_DIR) $(TCL_DEFS)  tclXAppInit.c
+
+tkXAppInit.o:	tkXAppInit.c
+	$(CC)  -c -I$(TCL_INC_DIR) $(TCL_DEFS) $(TK_XINCLUDES) tkXAppInit.c
+
+
+#------------------------------------------------------------------------------
+# how to build objects for sybtcl and libSybtcl
+
+sybtcl.o:	../generic/sybtcl.c 
+	$(CC) -c $(CTCOMPATINC) -I$(TCL_INC_DIR) $(SYB_CCOPTS) $(TCL_DEFS)  \
+		   ../generic/sybtcl.c
+
+shsybtcl.o:	../generic/sybtcl.c 
+	$(CC) -c $(CTCOMPATINC) -I$(TCL_INC_DIR) $(SYB_CCOPTS) $(TCL_DEFS) \
+		   $(TCL_SHLIB_CFLAGS) ../generic/sybtcl.c
+	mv -f sybtcl.o shsybtcl.o
+
+dbtoct.o:	../generic/ctcompat/dbtoct.c
+	$(CC) -c -I../generic/ctcompat $(SYB_CCOPTS) -I$(TCL_INC_DIR) \
+		$(TCL_DEFS)  ../generic/ctcompat/dbtoct.c
+
+shdbtoct.o:	../generic/ctcompat/dbtoct.c
+	$(CC) -c -I../generic/ctcompat $(SYB_CCOPTS) -I$(TCL_INC_DIR) \
+		$(TCL_DEFS)  $(TCL_SHLIB_CFLAGS)  ../generic/ctcompat/dbtoct.c
+	mv -f dbtoct.o shdbtoct.o
+
+
+$(LIB_SYBTCL):	$(SYB_LIB) sybtcl.o $(CTCOMPATOBJ)
+	@echo "building initial libSybtcl$(SYBTCL_LIBVER).a"
+	-mkdir libtmp
+	-rm -f libtmp/*
+	-libnum=1 ;				\
+	  for L in $(SYB_LIB) ; do		\
+	    cd libtmp ;				\
+	    echo "  adding objects from $$L" ;	\
+	    ar x $$L || cp $$L . ;		\
+	    for F in * ; do			\
+	      mv $$F $$libnum$$F ;		\
+	    done ;				\
+	    libnum=`expr $$libnum + 1` ;	\
+	    ar cr ../$(LIB_SYBTCL) * ;		\
+	    rm -f *.o *.a ;			\
+	    cd .. ;				\
+	  done 
+	-rm -f libtmp/*
+	ar cr $(LIB_SYBTCL) sybtcl.o $(CTCOMPATOBJ)
+	-$(RANLIB) $(LIB_SYBTCL)
+
+$(LIB_SH_SYBTCL):   shsybtcl.o $(CTCOMPATSHO)
+	$(TCL_SHLIB_LD) $(OTHER_LD_SEARCH_FLAGS) \
+	    -o $(LIB_SH_SYBTCL) shsybtcl.o $(CTCOMPATSHO)  \
+	    -L$(SYB_LIB_DIR) $(SYB_SH_LIB) $(SYB_SYS_LIBS) \
+	    $(TCL_LIB_SPEC) $(TCL_LIBS)
+	-$(RANLIB) $(LIB_SH_SYBTCL)
+
+#------------------------------------------------------------------------------
+# how to build executables and man page
+
+$(TCL_EXEC):    $(LIB_SYBTCL) tclAppInit.o
+	$(CC) tclAppInit.o    $(TCL_LD_FLAGS) $(TCL_LD_SEARCH_FLAGS) \
+	      -L. $(LNK_SYBTCL) $(SYB_SYS_LIBS) \
+	      $(TCL_LIB_SPEC) $(TCL_LIBS) -o $(TCL_EXEC)
+
+$(WISH_EXEC):   $(LIB_SYBTCL) tkAppInit.o
+	$(CC) tkAppInit.o $(TCL_LD_FLAGS) $(TCL_LD_SEARCH_FLAGS) \
+	      -L. $(LNK_SYBTCL) $(SYB_SYS_LIBS) \
+	      $(TK_LIB_SPEC)  $(TK_LIBS) \
+	      $(TCL_LIB_SPEC) $(TCL_LIBS) -o $(WISH_EXEC)
+
+$(TCLX_EXEC):	$(LIB_SYBTCL) tclXAppInit.o 
+	$(CC) tclXAppInit.o   $(TCL_LD_FLAGS) $(TCL_LD_SEARCH_FLAGS) \
+	      -L. $(LNK_SYBTCL) $(SYB_SYS_LIBS) \
+	      $(TCLX_LIB_SPEC) \
+              $(TCL_LIB_SPEC) $(TCLX_LIBS) $(TCL_LIBS) -o $(TCLX_EXEC)
+
+$(WISHX_EXEC):	$(LIB_SYBTCL) tkXAppInit.o
+	$(CC) tkXAppInit.o   $(TCL_LD_FLAGS) $(TCL_LD_SEARCH_FLAGS) \
+	      -L. $(LNK_SYBTCL) $(SYB_SYS_LIBS) \
+	      $(TKX_LIB_SPEC) $(TCLX_LIB_SPEC) \
+	      $(TK_LIB_SPEC) $(TCL_LIB_SPEC) \
+	      $(TK_LIBS) $(TKX_LIBS) $(TCLX_LIBS) $(TCL_LIBS) -o $(WISHX_EXEC)
+
+
+# static-link to build executables without using the large libSybtcl.a
+# since no dependencies on this target, use after a regular 'make'
+# all .o objects will need to be made prior to using static-link
+
+static-link: 
+	if test "$(TCLX_FULL_VERSION)" ; then 		\
+	  $(CC) tclXAppInit.o sybtcl.o $(CTCOMPATOBJ) 	\
+	    $(TCL_LD_FLAGS) $(TCL_LD_SEARCH_FLAGS) 	\
+	    -L$(SYB_LIB_DIR) $(SYB_SH_LIB) 		\
+	    $(TCLX_LIB_SPEC) 				\
+	    $(TCL_LIB_SPEC) $(TCLX_LIBS) $(TCL_LIBS) -o $(TCLX_EXEC); \
+	  $(CC) tkXAppInit.o sybtcl.o $(CTCOMPATOBJ) 	\
+	    $(TCL_LD_FLAGS) $(TCL_LD_SEARCH_FLAGS) 	\
+	    -L$(SYB_LIB_DIR) $(SYB_SH_LIB) 		\
+	    $(TKX_LIB_SPEC) $(TCLX_LIB_SPEC) 		\
+	    $(TK_LIB_SPEC) $(TCL_LIB_SPEC) 		\
+	    $(TK_LIBS) $(TKX_LIBS) $(TCLX_LIBS) $(TCL_LIBS) -o $(WISHX_EXEC) ; \
+	else 						\
+	  $(CC) tclAppInit.o  sybtcl.o $(CTCOMPATOBJ) 	\
+	    $(TCL_LD_FLAGS) $(TCL_LD_SEARCH_FLAGS) 	\
+	    -L$(SYB_LIB_DIR) $(SYB_SH_LIB) 		\
+	    $(TCL_LIB_SPEC) $(TCL_LIBS) -o $(TCL_EXEC) ; \
+	  $(CC) tkAppInit.o sybtcl.o $(CTCOMPATOBJ) 	\
+	    $(TCL_LD_FLAGS) $(TCL_LD_SEARCH_FLAGS) 	\
+	    -L$(SYB_LIB_DIR) $(SYB_SH_LIB) 		\
+	    $(TK_LIB_SPEC)  $(TK_LIBS)			\
+	    $(TCL_LIB_SPEC) $(TCL_LIBS) -o $(WISH_EXEC) ; \
+	fi
+
+$(MAN_PAGE):	../doc/sybtcl.man
+	cp ../doc/sybtcl.man $(MAN_PAGE)
+
+man-formatted:  ../doc/sybtcl.man
+	rman -f html ../doc/sybtcl.man > ../doc/sybtcl.html
+	nroff -man ../doc/sybtcl.man > ../doc/sybtcl.txt
+	groff -Tps -man ../doc/sybtcl.man > ../doc/sybtcl.ps
+
+
+#------------------------------------------------------------------------------
+# test
+# run tests, try to find a good tclsh interpreter, prefer static ones we built
+# otherwise try to find one on the path
+
+tests: test
+
+.NO_PARALLEL: test
+
+test:  all
+	-(cd ../tests; \
+	       ../unix/$(TCL_EXEC) all || \
+	       ../unix/$(TCLX_EXEC) all || \
+	       $(BIN_DIR)/tclsh$(TCL_VERSION) all || \
+	       tclsh$(TCL_VERSION) all || \
+	       tclsh all )
+
+
+#------------------------------------------------------------------------------
+# install targets
+
+install:  @INSTALL_TARGET@  install-man  install-tools
+
+install-binaries:  @INSTALL_TARGET@
+
+install-libraries:
+	@echo 'no libraries to install'
+
+install-shared:	$(LIB_SH_SYBTCL)   
+	@echo installing $(LIB_SH_SYBTCL)
+	$(INSTALL_PROGRAM) $(LIB_SH_SYBTCL)  $(LIB_DIR)/$(LIB_SH_SYBTCL)
+	@echo installing pkgIndex.tcl
+	-mkdir $(LIB_DIR)/Sybtcl$(SYBTCL_LIBVER)
+	$(INSTALL_PROGRAM) pkgIndex.tcl  $(LIB_DIR)/Sybtcl$(SYBTCL_LIBVER)/pkgIndex.tcl
+
+install-static:	@PROGS@   $(LIB_SYBTCL)
+	@for f in $(T_EXEC) $(W_EXEC) ; do  \
+	  if test -x $$f ; then  \
+	    echo installing $$f; \
+	    $(INSTALL_PROGRAM) $$f  $(BIN_DIR)/$$f ; \
+	  fi ; \
+	  done
+	@echo installing $(LIB_SYBTCL)
+	$(INSTALL_DATA)    $(LIB_SYBTCL) $(LIB_DIR)/$(LIB_SYBTCL)
+
+install-man:  $(MAN_PAGE)
+	@echo installing $(MAN_PAGE)
+	$(INSTALL_DATA)    $(MAN_PAGE)  $(MANN_DIR)/$(MAN_PAGE)
+
+install-wisqlite: install-tools
+
+install-tools:
+	for file in wisqlite sp_who sybmon sign_on.tcl ; do \
+	  echo "installing $$file" ; \
+	  if test "@INSTALL_TARGET@" = "install-shared" ; then \
+		echo '#!$(BIN_DIR)/wish$(TK_VERSION)' >$(BIN_DIR)/$$file ; \
+	  else \
+		echo '#!$(BIN_DIR)/$(W_EXEC)' >$(BIN_DIR)/$$file ; \
+	  fi ; \
+	  cat ../samples/$$file >>$(BIN_DIR)/$$file ; \
+	  chmod 755 $(BIN_DIR)/$$file ; \
+	done 
+
+clean:
+	rm -f $(T_EXEC) $(W_EXEC) $(MAN_PAGE) 				\
+	      sybtcl.o shsybtcl.o dbtoct.o shdbtoct.o 			\
+	      $(LIB_SYBTCL) $(LIB_SH_SYBTCL)  				\
+	      *pure*.o *pure*.a *pure*$(TCL_SHLIB_SUFFIX) 		\
+	      tclXAppInit.c tkXAppInit.c tclXAppInit.o tkXAppInit.o     \
+	      tclAppInit.c  tkAppInit.c  tclAppInit.o  tkAppInit.o      \
+	      config.cache config.log 					\
+	      ../tests/alloc.stats ../tests/sybtcl.mem
+
+really-clean: clean
+	rm -f Makefile config.status libtmp/* pkgIndex.tcl *.o install
+	rm -rf libtmp
+
+distclean: really-clean
+
+###############################################################################
+# end of Makefile
+###############################################################################

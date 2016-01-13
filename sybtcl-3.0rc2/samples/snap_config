@@ -1,0 +1,49 @@
+#!/usr/local/bin/tcl
+
+# snap-config
+#
+# Copyright 1992, Tom Poindexter
+#
+# this tcl script takes a snap shot of the current server configuration, and
+# writes out an isql script that can re-create the configuration.
+# the configuration script is written to stdout
+# the default server is used (DSQUERY).
+# not much error checking is done.
+
+# usage: snap-config userid password
+#
+
+global sybmsg
+
+set uid [lindex $argv 0]
+set pw  [lindex $argv 1]
+
+# normally, i would catch errors from sybconnect
+# in this case, just let tcl print an error & exit
+
+set syb [sybconnect $uid $pw]
+
+sybuse $syb master
+
+puts stdout "use master"
+puts stdout "go"
+
+sybsql $syb "sp_configure"
+
+set row [sybnext $syb]
+while {[string compare $sybmsg(nextrow) REG_ROW] == 0} {
+  
+  puts stdout "sp_configure '[lindex $row 0]', [lindex $row 3]" 
+  puts stdout "go" 
+  
+  set row [sybnext $syb]
+}
+
+puts stdout "reconfigure"
+puts stdout "go"
+
+sybclose $syb
+
+exit
+
+# finis

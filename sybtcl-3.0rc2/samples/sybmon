@@ -1,0 +1,225 @@
+#!/usr/local/bin/wishx
+# Graphic monitoring for Sybase
+#
+# (c) 1995 Paul COURBIS - Gnu Copyleft License - Version 1.4
+# plc@Quotient.fr
+#
+# Many thanks to David Hubbard for his beta-testing/debugging/improvements
+#
+# Blue : Cpu load
+# Red  : I/O Load
+# grey : background
+# update : 5 secs
+#
+# Change these values by pressing shift-button1 in window
+# 
+#
+# To do :
+#
+#           - Add command-line options to handle :
+#                    o Window size
+#                    o Time intervel
+#                    o Colors
+#                    o User name / password
+#                    o Server name
+#
+
+package require Sybtcl
+
+if {[file isfile sign_on.tcl]} {
+    source sign_on.tcl
+} elseif {[file isfile [file join [file dirname [info script]] sign_on.tcl]]} {
+    source [file join [file dirname [info script]] sign_on.tcl]
+} elseif {[file isfile [file join [file dirname [info nameofexecutable]] sign_on.tcl]]} {
+    source [file join [file dirname [info nameofexecutable]] sign_on.tcl]}
+
+
+global interval cpu_color io_color background
+
+set interval   5000
+set cpu_color  "blue"
+set io_color   "red"
+set background "grey"
+
+getSignOn 0
+
+catch { sybconnect $user $password $server sybmon} SybHandle
+
+set maxdata 350
+set initialheight 100
+set datawidth 2
+
+wm geom . [ expr $maxdata * $datawidth ]x$initialheight
+
+canvas .load -width [ expr $maxdata * $datawidth ] -height $initialheight \
+  -bg $background -relief flat
+pack .load -side left -expand 1 -fill both
+
+wm title . "Cpu/IO load for sybase server $server"
+
+proc Options {} {
+   global interval cpu_color io_color background
+   global new_interval new_cpu_color new_io_color new_background
+
+   set new_interval   [ expr $interval / 1000 ]
+   set new_cpu_color  $cpu_color
+   set new_io_color   $io_color
+   set new_background $background
+
+   toplevel .options
+   wm title .options "Sybmon options settings"
+
+   frame .options.update
+      label .options.update.label -text "Update every "
+      .options.update.label configure -anchor w
+      pack .options.update.label -side left
+
+      entry .options.update.time -textvariable new_interval
+      pack  .options.update.time -side left
+      .options.update.time configure -width 5
+
+      label .options.update.timel2 -text second(s)
+      pack  .options.update.timel2 -side left
+   pack .options.update -side top -fill x -pady 2m
+
+   frame .options.background
+      label .options.background.label -text "Background color : "
+      .options.background.label configure -anchor w
+      pack .options.background.label -side left
+
+      entry .options.background.time -textvariable new_background
+      pack  .options.background.time -side right
+   pack .options.background -side top -fill x -pady 2m
+
+   frame .options.io_color
+      label .options.io_color.label -text "I/O load color : "
+      .options.io_color.label configure -anchor w
+      pack .options.io_color.label -side left
+
+      entry .options.io_color.time -textvariable new_io_color
+      pack  .options.io_color.time -side right
+   pack .options.io_color -side top -fill x -pady 2m
+
+   frame .options.cpu_color
+      label .options.cpu_color.label -text "Cpu load color : "
+      .options.cpu_color.label configure -anchor w
+      pack .options.cpu_color.label -side left
+
+      entry .options.cpu_color.time -textvariable new_cpu_color
+      pack  .options.cpu_color.time -side right
+   pack .options.cpu_color -side top -fill x -pady 2m
+
+   frame .options.buttons
+      button .options.buttons.ok -text "OK"  \
+			   -command { 
+				       set $interval [ expr $new_interval * 1000 ]
+				       set cpu_color  $new_cpu_color
+				       set io_color   $new_io_color
+				       set background $new_background
+
+                                       .load configure -background $background
+
+				       destroy .options
+				    }
+      pack .options.buttons.ok -side left -padx 2m
+
+      button .options.buttons.cancel -text "Cancel" -command { destroy .options }
+      pack .options.buttons.cancel -side left -padx 2m
+
+      button .options.buttons.exit -text "Exit" -command { exit }
+      pack .options.buttons.exit -side left -padx 2m
+   pack .options.buttons -side top -pady 2m
+
+   bind .options <KeyPress-Return> ".options.buttons.ok invoke"
+}
+
+bind . <Shift-ButtonPress-1> { Options }
+
+set CpuDataList { }
+set IODataList { }
+
+proc UpdateData { SybHandle ticks when last lastio } {
+
+   global CpuDataList datawidth
+   global IODataList datawidth
+   global interval cpu_color io_color background
+
+   sybsql $SybHandle "select @@cpu_busy"
+   set cpu [ sybnext $SybHandle ]
+
+   sybsql $SybHandle "select @@io_busy"
+   set io [ sybnext $SybHandle ]
+
+   sybsql $SybHandle "select @@idle"
+   set idle [ sybnext $SybHandle ]
+
+   set time [ expr $cpu + $io + $idle ]
+
+   if { $ticks == 0 } {
+      sybsql $SybHandle "select @@timeticks"
+      set ticks [ sybnext $SybHandle ]  
+      set ticks [ expr $ticks / 100 ]
+   } else {
+
+      set dim [ wm geometry . ]
+      scan $dim "%dx%d+" w h
+
+      set margin_x 10
+      set margin_y 10
+
+      set w [ expr $w - $margin_x - $margin_x ]
+      set h [ expr $h - $margin_y - $margin_y ]
+
+      set delta_t [ expr $time - $when ]
+      set delta_v 0
+
+      set delta_v [ expr $io - $lastio + $delta_v ]
+      set value [ expr $delta_v * 1000 ]
+      set value [ expr $value / $delta_t ]
+      lappend IODataList $value
+
+      set delta_v [ expr $cpu - $last + $delta_v ]
+      set value [ expr $delta_v * 1000 ]
+      set value [ expr $value / $delta_t ]
+      lappend CpuDataList $value
+
+      set maxdata [ expr $w / $datawidth ]
+
+      set l [ llength $CpuDataList ]
+      if { $l > $maxdata } {
+	 set CpuDataList [ lrange $CpuDataList 1 $maxdata ]
+	 set IODataList [ lrange $IODataList 1 $maxdata ]
+      }
+
+      set startx $margin_x
+      set id 0
+      foreach v $CpuDataList {
+	 set endx [ expr $startx + $datawidth ]
+	 .load delete b$id
+	 set v [ expr $v * $h ]
+	 set v [ expr $v / 1000 ]
+	 set v [ expr $h - $v ]
+	 .load create rectangle $startx [ expr $h + $margin_y ] [ expr $endx - 1 ]  [ expr $v + $margin_y ] -fill $cpu_color -outline $cpu_color -tags b$id
+	 set startx $endx
+	 set id [ expr $id + 1 ]
+      }
+
+      set startx $margin_x
+      set id 0
+      foreach v $IODataList {
+	 set endx [ expr $startx + $datawidth ]
+	 .load delete c$id
+	 set v [ expr $v * $h ]
+	 set v [ expr $v / 1000 ]
+	 set v [ expr $h - $v ]
+	 .load create rectangle $startx [ expr $h + $margin_y ] [ expr $endx - 1 ]  [ expr $v + $margin_y ] -fill $io_color -outline $io_color -tags c$id
+	 set startx $endx
+	 set id [ expr $id + 1 ]
+      }
+
+   }
+
+   after $interval [ list UpdateData $SybHandle $ticks $time $cpu $io ] 
+}
+
+UpdateData $SybHandle 0 0 0 0

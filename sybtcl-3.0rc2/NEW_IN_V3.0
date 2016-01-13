@@ -1,0 +1,273 @@
+SIGNIFICANT CHANGES IN VERSION 3.0
+
+
+Well, the good news is that Sybtcl is nearly backward compatible with
+Version 2.5.  Several new features have been added, and some old things 
+are gone.
+
+First and most significant, Sybtcl 3.0 uses the Tcl data objects 
+of Tcl 8.0+.  Integers are stored as integers, floating point as 
+double, so no conversion to and from string.  Note that Sybase types
+of NUMERIC, DECIMAL, and MONEY *are* stored as strings, because conversion to
+integer or double might cause loss of precision.  Final version might
+add some checking to see if values can be converted to native types
+without loss of precision, nothing final yet.  
+
+All Tcl command interfaces have been rewritten to use the object interface
+also.  
+
+The result of all of this is that Tcl 7.6 is no longer supported.
+
+
+NEW COMMANDS AND VARIABLES:
+
+	syberrhandler <proc>
+		define a Tcl procedure to be called when a DB-Lib error
+		is raised.
+	sybmsghandler <proc>
+		define a Tcl procedure to be called when a server message
+		is received.
+		
+		In both cases, the sybmsg array is still set to the same
+		values on DB-Lib errors and server messages.  The commands
+		give you the ability to easily define callbacks.
+
+		proc err_callback {args} {
+		    puts "error got $args"
+		}
+		syberrhandler err_callback
+
+		Error and message handlers can be specified before
+		connection to the server.
+
+		See the man page for specific arguments that are passed for 
+		error and message handlers.
+
+	sybmoney <operator> <money1> <money2>
+		perform basic operations on Sybase money types, conversion
+		to and from strings, to avoid loss of precision.
+		Operators are 'add', 'sub', 'mul', 'div', and 'cmp'
+
+		sybmoney add $mon1 $mon2
+
+	sybevent <handle> ?script?  
+		define a script to execute when data is available for the
+		specified handle.  very similar to Tcl's 'fileevent' 
+		command.  An event handler can be specified after SQL has
+		been sent to the server with sybsql. 
+
+		proc getrows {hand} {
+		   set row [sybnext $hand]
+		   switch $sybmsg(nextrow) {
+		     NO_MORE_RESULTS {
+			 global finished
+		         set finished 1
+			 return
+		     }
+		     NO_MORE_ROWS {
+			 return
+		     }
+		   }
+		   # else it's a REG_ROW or compute row
+		   puts "you got: $row"
+		}
+		set finished 0
+		sybsql $hand "select foo from bar" -async
+		sybevent $hand [list getrows $hand]
+		vwait finished
+		
+		also see sybmsg(bgevents)
+
+	sybmsg array
+		sybmsg now has several new elements:
+		
+		sybmsg(dblibinfo)    what features your version of sybtcl 
+				     supports.
+
+		sybmsg(isnull)	     set on each row, specifies if a column
+				     is null or not.  each corresponding element
+				     is set to '1' if the value is null, '0'
+				     otherwise.
+
+		sybmsg(binaryashex)  store binary data as hex strings for
+				     Sybtcl 2.5 compatibilty, see below.
+
+		sybmsg(bgevents)     allow Tcl events to be serviced while
+				     Sybtcl is waiting on server response.
+				     "idletasks", like 'update idletasks'.
+				     "all", process all events, like 'update'.
+				     "none", don't process events.  default is
+				     idletasks.  background event processing
+				     is stopped when Sybase data is available.
+
+		sybmsg(bgpollinterval) sets the polling timeout value in
+		                     milliseconds (1 - 1000).
+		                     since Sybase must poll to reliably
+				     check for input, dbpollinterval can
+				     fine tune the timeout.  default is 200.
+
+
+POTENTIAL INCOMPATIBLITIES:
+
+Since the Tcl data object  are used, Sybase binary data types BINARY and
+IMAGE are stored as binary data.  If you want to get Sybtcl 2.5 behavior where
+binary data is converted to hex strings, use:
+	set sybmsg(binaryashex) 1
+
+Sybtcl now can process Tcl events while Sybtcl commands are waiting on
+server responses, controlled with sybmsg(bgevents).  Default value is 
+"idletasks", which is similar to Tcl's 'update idletasks' command.  When set 
+to "all", Sybtcl processes all events while waiting.  This may cause timing 
+critical scripts to behave differently.  Set to "none" to mimic Sybtcl 2.5
+behavior, where no events are processed while waiting for server response.
+
+The other possible incompatibility is that sybmsg(floatprec) is now 
+deprecated (actually, it is not used for anything.)  Sybase types of
+FLOAT, REAL, and DOUBLE PRECISION are stored as Tcl doubles.  Thus, floating
+point precison is controlled by the Tcl variable 'tcl_precision', just like
+any other floating point number.  Tcl 8.0 uses 12 as the default floating point
+precision.  It can be set from 1 to 17.  Setting sybmsg(floatprec) has no
+action whatsoever.   
+
+
+CHANGES TO EXISTING COMMANDS:
+
+	sybconnect   
+		now can take optional 'charset' argument,
+		setting which character set to use
+		It is an optional positional parameter, 
+		just like the others.
+
+		sybconnect id passwd server appname server charset
+
+		See your $SYBASE/charsets directory for what character
+		sets are supported with your installation.
+
+	sybreadtext / sybwritetext 
+		now can read and write to Tcl variables in addition to files.
+		Old syntax is supported (to/from files), but can specify
+		-variable to specify a variable name, or -file to
+		explicitly name a file.   Note that -variable names a 
+		variable, not a value.
+
+		# use contents of somebigvar to write into column
+		set somebigvar "this is really big"
+		sybwritetext $hand tab.col 1 -variable somebigvar  -nolog
+
+		# read column and write into file
+		sybreadtext  $hand -file afilename
+
+		allow the preceeding sybsql to be invoked as -async, wait
+		until results ready while processing events (based on
+		sybmsg(bgevents), then proceed with operation.  service
+		other Tcl events during read/write.
+
+		sybsql $hand "select image_col from foobar where x=$x" -async
+		sybreadtext $hand -variable pix
+
+	sybnext
+		the optional tclvar arguments can now be a list, in addition
+		to separate arguments as before.
+
+		sybnext $hand {commands} {} col1 1 col2 2     ;# old way ok
+		sybnext $hand {commands} {} {col1 1 col2 2}   ;# list also valid
+		
+
+INTERNAL CHANGES:
+
+Sybtcl now includes a safe interpreter initialization point.  If Sybtcl
+is used in a safe interpreter, all operations except reading and writing
+to files in sybwritext/sybreadtext are enabled.  Any handles left open
+in a slave interpreter are closed upon interpreter deletion, reclaiming
+those handles for future use.
+
+Sybnext with commands has been rewritten to retain compiled Tcl objects.
+The first execution of a command string will cause the commands to be
+compiled, for each row afterward, the bytecodes are executed, resutling
+in substantial savings.  This savings is *only* realized if the sybnext
+substitution characters are *not* used.  When substitution characters are
+used the command must be compiled for each row.  The code now checks if
+no substituions are specified, or the substitution character argument is
+null.  Tclvar specifications should be used to bind column values to Tcl
+variables.
+
+	# no savings, substitutions used
+	sybnext $hand {
+	    puts @1
+	} 
+
+	# no savings, substitutions used with alternate substitution char
+	sybnext $hand {
+	    set col1 %1
+	    puts "$col1, $col2"
+	} % col2 2 
+
+	# compiled object used, no substitution characters in commands
+	sybnext $hand {
+	    puts "$col1, $col2"
+	} @ col1 1 col2 2 
+
+	# compiled object used, no substitution, explicit null substitution char
+	sybnext $hand {
+	    puts "$col1, $col2"
+	} {} col1 1 col2 2
+
+
+Sybnext parse_columns() is rewritten to store Sybase datatypes into
+appropriate Tcl objects.  NUMERIC, DECIMAL, and MONEY types are still
+stored as character, as conversion to integer or double may cause
+loss of precision.   Use my Mpexpr extension to perform calculations
+on arbitrary length numbers if needed.  http://www.nyx.net/~tpoindex/
+
+Programmer options (sybmsg elements nullvalue, binaryashex, maxtext, 
+dateformat, fixedchar, bgevents) are now traced, and values are kept in a C 
+struct for each interpreter.  
+
+Tcl channels are used in sybreadtext and sybwritetext, achieving 
+platform portability with Tcl code.   Unfortunately, TclStat() is a
+private function in Tcl 8.0; Macintosh code uses 'seek to end of file'
+to get file size, as MPW (my Mac developent environment) doesn't have a 
+handy stat() or fstat() function.
+
+
+SYBTCL CAPI:
+
+Sybtcl-capi is stuck at version 2.6, which is 2.5 with a few changes.
+Emulating Tcl 8.0 in simple C macros and functions is beyond my
+free time.  The existing interface is still useful if you are doing
+any native C code with Sybtcl.
+
+
+
+GOT LINUX?
+
+Wooooo hoooooo!  Sybase has released a full version of Sybase Adaptive
+Server Enterprise (ASE) 11.0.3  for Linux.  If you have previously used the
+CT-Lib interface for Linux, you can now use the full DB-Lib interface.
+Get yours at: www.sybase.com  www.redhat.com  www.caldera.com  www.suse.com
+
+CT-Lib is still supported through ctcompat library, and a bug 
+with floating point datatypes has been fixed.  CT-Lib is still not
+recommended if you have DB-Lib available.
+
+
+GOT MAC?
+
+I've now have a Sybtcl shared library compiled for PowerPC.  See the
+./mac directory.  Built with Apple's MPW (it's free) rather than
+CodeWarrior.
+
+
+TEST SUITE:
+
+Long overdue, and since no one volunteered one, I finally took the time
+to write one.  As of 3.0b3, it's not fully complete, but has let me
+clean up a bunch of code that probably would have been cause for
+additional beta versions.  The test suite requires connection to a 
+Sybase database, and you must have permissions to create tables and
+stored procedures.  The 3.0b3 version runs the test suite on
+Unix and Windows without problem; on Macintosh and when using --enable-ctlib
+on Unix some tests will fail, especially those dealing with event processing.
+
+
+

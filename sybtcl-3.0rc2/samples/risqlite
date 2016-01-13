@@ -1,0 +1,1588 @@
+#!/usr/users/tpoindex/bin/wishx
+
+#  wisql
+# 	
+#  Copyright 1992 Tom Poindexter.
+#
+#  a windowing version of the sybase isql command  
+#  uses extended tcl, tk, and sybtcl interface
+#
+#  usage: wisql
+#
+#  version 1.1 - change sql input to use tk2.2 text widget.
+#                handle text columns a little better - break into lines.
+#                add getObjs to view other objects.
+#                allow comments '#' and 'go's in sql.
+#                add count of all rows returned by server
+#  version 1.2 - change showFields to display 30 chars for field name
+#                using hand coded sql instead of sp_help.
+#                add sybmsg(msgno) to error messages.
+#                change .m.msg to a message (used to be a label) so that all
+#                the text of a message will be displayed.
+#                add some arrow key bindings for Entry and Text classes.
+#                add shift-return and control-return binding to execute sql.
+#                added a menu for selecting a server on signon window.
+#                fix pickList OK command when nothing selected.
+#                a few other cosmetics changes.
+#  version 1.3 - change a few things for newer versions of Tk & TclX,
+#                toplevel pathnames must start with lower case, wishx
+#                command interpreter instead of wish.
+#                if SYBASE environment variable is not set, check for 
+#                user sybase home directory in "ypcat passwd" or /etc/passwd
+#                make the execute button a cancel button while execing sql
+#
+#  version 2.0 - change a few things for newer versions of Tk & TclX,
+#  version 2.1 - use sybnext ?commands? when possible; use Paul Raines (TkMail)
+#                bindings for Entry and Text widgets.
+#  version 2.2 - add dialog to set nullvalue; appendclear and command ring 
+#                buffer from oratcl's wosql
+#  version 2.3 - add selection handler code from wosql.
+#                change pack order so broken window managers won't cut off
+#                widgets on the bottom.
+#                many small tweaks for tk4.0, remove hard coded bindings for
+#                native tk4.0 bindings (text & entry)
+#                add option value to set float return precision
+#  version 2.4 - add package require command, use sybmsg(fixedchar) to
+#                ensure procedure and trigger text retrieved fully
+#  version 2.5 - use Tk 4.2 builtin procs for dialog, file handling, elminate
+#                dependence on tclx
+#                
+
+package require Tk 
+package require Sybtcl
+
+# cause Sybtcl to be loaded right away
+catch {sybconnect}
+
+# define global names in use
+global sybmsg
+global uid
+global syb
+global currentFile
+global server
+global fontSize
+global execCmd
+global cmdRing
+global cmdIdx
+global cmdLast
+global appendclear
+# default result append or clear
+set appendclear 1
+
+# set what command Execute button should do
+set execCmd doSql
+
+set fontSize 14
+
+if {[info exist env(USER)]} {
+  set uid $env(USER)
+} else {
+  if {[info exist env(HOME)]} {
+    set uid [file tail $env(HOME)]
+  } else {
+    set uid ""
+  }
+}
+
+set syb {}
+set currentFile {}
+
+set cmdIdx  0
+set cmdLast 0
+for {set i 0} {$i < 10} {incr i} {
+  set cmdRing($i) ""
+}
+
+wm title    . "Windowing ISQL"
+wm iconname . "Wisql"
+
+
+########################
+#
+# getFile
+#
+#  read a file, return contents as string
+
+proc getFile {afile} {
+  set contents ""
+  catch { set fd [open $afile]
+	set contents [read $fd]
+	close $fd }
+  return $contents
+}
+
+
+########################
+#
+# putFile
+#
+#  write a file from a string
+
+proc putFile {afile contents} {
+  catch { set fd [open $afile w]
+	puts -nonewline $fd $contents
+	close $fd }
+}
+
+
+########################
+#
+# handleList
+#
+#  called during a request for primary selection for listboxes and text
+#  that bind the "selection get" command for button-2
+#
+ 
+proc handleList {w filtproc offset max} {
+  set doproc [string length [info commands $filtproc]]
+  if $doproc {
+    set s "[$filtproc $w]"
+  } else {
+    # set s [$w get [lindex [$w curselection] 0] ]
+    set i [$w curselection]
+    set n ""
+    set s ""
+    foreach r $i {
+      set l [$w get $r]
+      append s "${n}$l"
+      set n "\n"
+    }
+ 
+  }
+  return [string range $s $offset $max]
+}
+ 
+########################
+#
+# filtCols
+#
+#  a special filtproc to return a column list
+#
+ 
+proc filtCols {w} {
+  set i [$w curselection]
+  set n ""
+  set s ""
+  foreach r $i {
+    set l [$w get $r]
+    set l [eval list $l]
+    append s "${n}[lindex $l 0]"
+    set n ", "
+  }
+  return "$s"
+}
+ 
+########################
+#
+# filtTab
+#
+#  a special filtproc to return word 1 "." word 2
+#
+ 
+proc filtTab {w} {
+  set s [$w get [lindex [$w curselection] 0] ]
+  set s [eval list $s]
+  return [string trim [lindex $s 0].[lindex $s 1]]
+}
+
+
+
+########################
+#
+# getSignOn
+#
+#   start it off
+#
+
+proc getSignOn {} {
+  global uid
+  global env
+  global matchInfo
+
+  # get valid servers from interfaces file
+  set syb_home [lsearch [array names env] SYBASE] 
+
+  if {$syb_home == -1} {
+      set syb_home ""
+      if {$tcl_platform(platform) == "unix"} {
+        catch {set syb_home [exec ypcat passwd | egrep  ^sybase: ]}
+      }
+      if {[string length $syb_home] > 0} {
+	  set syb_home [lindex [split $syb_home :] 5]
+      } else {
+          if {$tcl_platform(platform) == "unix"} {
+	    set syb_home [exec egrep ^sybase: < /etc/passwd ]
+	  }
+	  if {[string length $syb_home] > 0} {
+	      set syb_home [lindex [split $syb_home :] 5]
+	  } else {
+	      set syb_home ""
+	  }
+      }
+  } else {
+      set syb_home $env(SYBASE)
+  }
+
+  if {[string length $syb_home] > 0} {
+    set intFile $syb_home/interfaces
+    set serverList ""
+    if {[file isfile $intFile]} {
+      set ifile [split [getFile $intFile] \n]
+      foreach line $ifile {
+        if {[regexp -nocase "(^\[a-z_]\[^ \t\r]*).*$" $line m s1]} {
+	  lappend serverList $s1
+	}
+      }
+    } else {
+      set serverList SYBASE
+    }
+  } else {
+    set serverList SYBASE
+  }
+  
+  wm geom     . 300x330
+  frame .s
+  message .s.m -justify center  -text "SQL Server Sign on" -aspect 2000 \
+		-font -*-helvetica-bold-o-*-*-20-*-*-*-*-*-*-*
+  frame .s.i
+  entry .s.i.uid -relief sunken  -width 10 
+  label .s.i.id  -text "  User Id" -anchor e
+  frame .s.p
+  entry .s.p.pw  -relief sunken -width 10 -show * -exportselection false
+  label .s.p.p   -text "  Password" -anchor e
+
+  frame .s.s
+  entry .s.s.ser -relief sunken -width 10 
+  menubutton .s.s.s -text " Server  " -anchor e -menu .s.s.s.m -relief raised
+  menu .s.s.s.m
+  foreach s $serverList {
+    .s.s.s.m add command -label $s \
+		  -command ".s.s.ser delete 0 end; .s.s.ser insert 0 $s "
+  }
+
+  message .s.err -text " " -justify center -aspect 2000
+
+  frame .s.b
+  button .s.b.ok  -text "Sign on" \
+      -command {tryConnect [.s.i.uid get] [.s.p.pw get] [.s.s.ser get]}
+  button .s.b.can -text "Cancel" -command "destroy ."
+
+  pack .s       -side top -expand 1 -fill both
+  pack .s.m     -side top -fill x  -pady 20
+  pack .s.i     -side top -pady 20 -anchor e
+  pack .s.i.uid -side right -expand 1 -padx 20
+  pack .s.i.id  -side left
+  pack .s.p     -side top   -pady 10 -anchor e
+  pack .s.p.pw  -side right -expand 1 -padx 20 
+  pack .s.p.p   -side left
+
+  pack .s.err   -side top -fill x -expand 1
+
+  pack .s.b.ok  -side left -fill x -expand 1
+  pack .s.b.can -side left -fill x -expand 1
+  pack .s.b     -side bottom -fill x -expand 0
+
+  pack .s.s.ser -side right  -expand 1 -padx 20 
+  pack .s.s.s   -side left
+  pack .s.s     -side bottom -pady 5 -anchor e
+
+  .s.i.uid insert 0 $uid
+
+  if {[lsearch [array names env] DSQUERY] >= 0} {
+    .s.s.ser insert 0 $env(DSQUERY)
+  } else {
+    .s.s.ser insert 0 SYBASE
+  }
+  focus .s.p.pw
+
+  bind .s.i.uid <KeyPress-Return> "focus .s.p.pw"
+  bind .s.p.pw  <KeyPress-Return> ".s.b.ok invoke"
+  bind .s.s.ser <KeyPress-Return> ".s.b.ok invoke"
+
+
+}
+
+
+getSignOn
+
+
+############################################################################
+# all procs follow
+
+########################
+#
+# tryConnect
+#
+#   try a connection to the sybase server
+#
+
+proc tryConnect {id pw ser} {
+  global sybmsg
+  global syb
+  global server
+  global sybid sybpw sybsv
+ 
+  set sybid $id
+  set sybpw $pw
+  set sybsv $ser
+
+  set server $ser
+
+  set retcode [catch {set syb [sybconnect $id $pw $ser wisqlite]}]
+
+  if $retcode==0 {
+    destroy .s
+    createMain
+    wm iconname . "Wisqlite-$ser"
+  } else  {
+    .s.err configure -text $sybmsg(dberrstr)
+    focus .s.p.pw
+  }
+}
+
+
+########################
+#
+# createMain
+#
+#   create the main window
+#
+
+proc createMain {} {
+  global syb
+  global sybmsg
+  global currentFile
+
+  wm geom    . 600x500
+  wm minsize . 400 370
+
+  # create a top level frame
+
+  frame .m -relief flat
+
+  # create a menu bar with some menu buttons
+
+  frame .m.mb -relief raised -borderwidth 2
+  menubutton .m.mb.file -text "File" -menu .m.mb.file.m -underline 0
+  menu .m.mb.file.m
+  .m.mb.file.m add command -label "New" -command doNew -underline 0
+  .m.mb.file.m add command -label "Open..." \
+		   -command "tryOpen" -underline 0
+  .m.mb.file.m add command -label "Save" -command doSave  -underline 0
+  .m.mb.file.m add command -label "Save as..." \
+		   -command "doSaveAs" -underline 5
+  .m.mb.file.m add separator
+  .m.mb.file.m add command -label "Exit"  -command confirmExit  -underline 0
+
+  menubutton .m.mb.out -text "Results" -menu .m.mb.out.m -underline 0
+  menu .m.mb.out.m
+  .m.mb.out.m add radiobutton -label "Append results" -variable appendclear \
+   -value 0  -command "set appendclear 0"
+  .m.mb.out.m add radiobutton -label "Clear results" -variable appendclear \
+   -value 1  -command "set appendclear 1"
+  .m.mb.out.m add separator
+
+  .m.mb.out.m add command -label "Clear" -command clearoutput -underline 0
+  .m.mb.out.m add command -label "Save as..." \
+	  -command "doSaveOut" -underline 0
+  .m.mb.out.m add command -label "Print" -command doPrint -underline 0
+  .m.mb.out.m add cascade -label "Font Size  " -menu .m.mb.out.m.f -underline 0
+  menu .m.mb.out.m.f
+  .m.mb.out.m.f add radiobutton -variable fontSize -value  8 -label " 8" \
+   -command ".m.o.out configure -font -*-courier-*-r-*-*-8-*-*-*-*-*-*-*"
+  .m.mb.out.m.f add radiobutton -variable fontSize -value 10 -label "10" \
+   -command ".m.o.out configure -font -*-courier-*-r-*-*-10-*-*-*-*-*-*-*"
+  .m.mb.out.m.f add radiobutton -variable fontSize -value 12 -label "12" \
+   -command ".m.o.out configure -font -*-courier-*-r-*-*-12-*-*-*-*-*-*-*"
+  .m.mb.out.m.f add radiobutton -variable fontSize -value 14 -label "14" \
+   -command ".m.o.out configure -font -*-courier-*-r-*-*-14-*-*-*-*-*-*-*"
+  .m.mb.out.m.f add radiobutton -variable fontSize -value 17 -label "17" \
+   -command ".m.o.out configure -font -*-courier-*-r-*-*-17-*-*-*-*-*-*-*"
+  .m.mb.out.m.f add radiobutton -variable fontSize -value 20 -label "20" \
+   -command ".m.o.out configure -font -*-courier-*-r-*-*-20-*-*-*-*-*-*-*"
+
+  menubutton .m.mb.op -text "Options" -menu .m.mb.op.m -underline 1
+  menu .m.mb.op.m
+  .m.mb.op.m add command -label "Set Null Value..."  -command setNull \
+                         -underline 4
+  .m.mb.op.m add command -label "Set Float Precision..."  -command setFloat \
+                         -underline 4
+
+
+  menubutton .m.mb.db -text "Databases" -menu .m.mb.db.m  -underline 0
+  menu .m.mb.db.m
+
+  sybuse $syb admin
+  sybsql $syb "select dbname from dst_databases"
+  set dbname [lindex [sybnext $syb] 0]
+  while {[string compare $sybmsg(nextrow) REG_ROW] == 0} {
+    if {[string length $dbname] > 0} {
+      .m.mb.db.m add command -label $dbname -command "useDB $dbname"
+    }
+    set dbname [lindex [sybnext $syb] 0]
+  }
+
+#foreach dbname {aroma admin irdbdev} {
+#.m.mb.db.m add command -label $dbname -command "useDB $dbname"
+#}
+
+  menubutton .m.mb.ob -text "Objects" -menu .m.mb.ob.m  -underline 0
+  menu .m.mb.ob.m
+  .m.mb.ob.m add command  -label "Tables"   -command showTables -underline 0
+  .m.mb.ob.m add command  -label "Views" -command "showViews " -underline 0
+  .m.mb.ob.m add command  -label "Macros" -command "showMacros Procedures P" -underline 0
+
+  # execCmd is normally "doSql", except while in doSql, then it is Cancel
+  button .m.mb.exec  -text "Execute" -command {eval $execCmd}   -relief flat
+
+  menubutton .m.mb.help -text "Help" -menu .m.mb.help.m  -underline 0
+  menu .m.mb.help.m
+  .m.mb.help.m add command -label "General" -command generalHelp -underline 0
+  .m.mb.help.m add cascade -label "Menus  "   -menu .m.mb.help.m.m -underline 0
+  .m.mb.help.m add command -label "About"   -command aboutHelp -underline 0
+
+  menu .m.mb.help.m.m
+  .m.mb.help.m.m add command -label "File"   -command menuHelpFile -underline 0
+  .m.mb.help.m.m add command -label "Results"   -command menuHelpOut -underline 0
+  .m.mb.help.m.m add command -label "Options"   -command menuHelpOpt -underline 1
+  .m.mb.help.m.m add command -label "Databases" -command menuHelpDB -underline 0
+  .m.mb.help.m.m add command -label "Objects" -command menuHelpObjs -underline 0
+  .m.mb.help.m.m add command -label "Execute" -command menuHelpExec -underline 0
+
+  pack .m.mb.file  .m.mb.out .m.mb.op .m.mb.db  .m.mb.ob  .m.mb.exec -side left 
+  pack .m.mb.help -side right
+  pack .m.mb      -side top -fill x
+
+
+  # create a top title
+
+  label .m.title -text "dbname" -relief raised \
+		-font -*-helvetica-bold-o-*-*-20-*-*-*-*-*-*-*
+
+  pack .m.title -side top
+
+  # create a frame listing sql code
+
+  frame .m.s -relief raised -borderwidth 2
+
+  label .m.s.l -text "SQL (noname)" 
+  scrollbar .m.s.vert -relief sunken -command ".m.s.sql yview" \
+	  -orient vertical
+  text .m.s.sql -font -*-courier-*-r-*-*-14-*-*-*-*-*-*-* -relief sunken \
+	  -height 8 -width 80 -yscroll ".m.s.vert set"  -wrap word \
+	  -borderwidth 2
+
+  bind .m.s.sql <Control-Return> ".m.mb.exec invoke; break"
+  bind .m.s.sql <Shift-Return>   ".m.mb.exec invoke; break"
+  bind .m.s.sql <Shift-Up>       "prevSql -1; break"
+  bind .m.s.sql <Control-Up>     "prevSql -1; break"
+  bind .m.s.sql <Shift-Down>     "prevSql  1; break"
+  bind .m.s.sql <Control-Down>   "prevSql  1; break"
+
+  pack .m.s.l    -side top -fill x
+  pack .m.s.vert -side right -fill y
+  pack .m.s.sql  -side left -fill both  -expand 1
+
+  pack .m.s -side top -fill both
+
+  # create a frame listing sql output
+
+  frame .m.o -relief raised
+
+  label .m.o.l -text "Results"
+  scrollbar .m.o.vert -relief sunken -command ".m.o.out yview" \
+	  -orient vertical
+  scrollbar .m.o.horz -relief sunken -command ".m.o.out xview" \
+	  -orient horizontal
+  listbox .m.o.out -relief sunken -selectmode extended \
+          -font -*-courier-*-r-*-*-14-*-*-*-*-*-*-*  \
+	  -yscroll ".m.o.vert set" -xscroll ".m.o.horz set"
+  selection handle .m.o.out "handleList .m.o.out NoFilterProc"
+  pack .m.o.l    -side top -fill x
+  pack .m.o.vert -side right -fill y
+  pack .m.o.horz -side bottom -fill x
+  pack .m.o.out  -side left -fill both -expand 1
+
+  # create a message at the bottom
+  message .m.msg -text "" -justify center -aspect 1000 -relief sunken \
+	-font -*-helvetica-bold-o-*-*-17-*-*-*-*-*-*-*
+    
+  pack .m.msg -side bottom -fill x
+
+  pack .m.o -side top -fill both -expand 1
+
+  pack .m -side top -fill both -expand 1
+
+  focus .m.s.sql
+
+  useDB [sybuse $syb admin]
+
+  .m.msg configure -text "select a database before issuing SQL!"
+
+}
+
+
+
+########################
+#
+# useDB
+#
+#   use a database
+#
+
+proc useDB {dbname} {
+  global syb
+  global server
+  global sybid sybpw sybsv
+
+  sybclose $syb
+  set syb [sybconnect $sybid $sybpw $sybsv wisqlite]
+  catch {sybuse $syb $dbname}
+  #set dbname [sybuse $syb]
+  .m.title configure -text "server: $server - database: $dbname"
+  setMsg "database changed to $dbname"
+
+}
+
+
+########################
+#
+# setMsg
+#
+#   set the text for the label at bottom of results window
+#
+
+proc setMsg {msg_text}  {
+  .m.msg configure -text $msg_text
+  update
+}
+
+
+########################
+#
+# confirmExit
+#
+#   really exit
+#
+proc confirmExit {} {
+
+  if {[tk_dialog .confirm  "Confirm Exit" "Really Exit?"  "" 0 \
+	     "Yes, dammit"  "Cancel" ] == 0} {
+    destroy .
+  }
+}
+
+########################
+#
+# clearsql
+#
+#   clear the sql code window
+#
+proc clearsql {} {
+  global currentFile
+  global cmdIdx
+  global cmdLast
+  set cmdIdx $cmdLast
+
+  .m.s.sql delete 1.0 end
+  .m.s.l   configure -text "SQL (noname)"
+  set currentFile ""
+  setMsg ""
+  focus .m.s.sql
+}
+
+
+########################
+#
+# clearoutput
+#
+#   clear the output listbox
+#
+proc clearoutput {} {
+
+  .m.o.out delete 0 end
+  setMsg ""
+  focus .m.s.sql
+}
+
+
+########################
+#
+# tryOpen
+#
+#    try to open a file 
+#
+
+proc tryOpen {} {
+
+  global currentFile
+  global cmdIdx
+  global cmdLast
+  set cmdIdx $cmdLast
+
+  set types {
+	{{SQL Files}     {*.sql} }
+	{{All Files}     {*} }
+  }
+  set filename [tk_getOpenFile -title Open -filetypes $types]
+  if {$filename == ""} return
+
+  if {[file isfile $filename]} {
+    clearsql
+    clearoutput
+    set currentFile [file tail $filename]
+    .m.s.l   configure -text "SQL (${currentFile})"
+    set result_lines [getFile $filename]
+    .m.s.sql insert 1.0 "$result_lines"
+    setMsg "$filename loaded"
+  } else {
+    setMsg "$filename not found"
+  }
+  focus .m.s.sql
+
+}
+
+
+
+
+########################
+#
+# doSaveAs
+#
+#    save the sql code
+#
+
+proc doSaveAs {} {
+  global currentFile
+  global cmdIdx
+  global cmdLast
+  set cmdIdx $cmdLast
+
+  set types {
+	{{SQL Files}     {*.sql} }
+	{{All Files}     {*} }
+  }
+  set filename [tk_getSaveFile -title "Save As" -initialfile $currentFile -filetypes $types]
+  if {$filename == ""} return
+
+  set openrc [catch {set f [open $filename w]}]
+  
+  if {$openrc==1} {
+    setMsg "Error: $filename could not be opened, not saved"
+    return
+  }
+
+  set currentFile $filename
+  .m.s.l   configure -text "SQL (${currentFile})"
+
+  puts $f [.m.s.sql get 1.0 end]
+  close $f
+  setMsg "SQL saved to $currentFile"
+
+}
+
+
+
+########################
+#
+# doSaveOut
+#
+#    save the sql results
+#
+
+proc doSaveOut {} {
+  global cmdIdx
+  global cmdLast
+  global currentFile
+  set cmdIdx $cmdLast
+
+  set resFile ""
+  if {[string length $currentFile] > 0} {
+    set resFile [split $currentFile .]
+    if {[llength $resFile] > 1} {
+      set resFile "[lindex $resFile 0].out"
+    } else {
+      set resFile ${currentFile}.out
+    }
+  }
+
+  set types {
+	{{Out Files}     {*.out} }
+	{{Text Files}    {*.txt} }
+	{{All Files}     {*} }
+  }
+  set filename [tk_getSaveFile -title "Save Results" -initialfile $resFile -filetypes $types]
+  if {$filename == ""} return
+
+  set openrc [catch {set f [open $filename w]}]
+  
+  if {$openrc==1} {
+    setMsg "Error: $filename could not be opened, not saved"
+    return
+  }
+
+  if [.m.o.out size]==0 {
+    setMsg "No output to save"
+    close $f
+    return
+  }
+
+  for {set i 0} {$i < [.m.o.out size]} {incr i} {
+    puts $f [.m.o.out get $i]
+  }
+  close $f
+  setMsg "Results saved to $filename"
+}
+
+
+
+
+########################
+#
+# doPrint
+#
+#    print the sql results
+#
+
+proc doPrint {} {
+
+  
+  if [.m.o.out size]==0 {
+    setMsg "No output to print"
+    return
+  }
+
+  for {set i 0} {$i < [.m.o.out size]} {incr i} {
+    append out_lines "[.m.o.out get $i]\n"
+  }
+  
+  switch $tcl_platform(platform) {
+    unix {set prnCmd lp}
+    win  {set prnCmd print}
+    default {setMsg "don't know how to print on $tcl_platform(platform)";return}
+  }
+  setMsg [exec lp << $out_lines]
+
+}
+
+
+
+########################
+#
+# doSave
+#
+#    save the sql code to currentFile or use filebox
+#
+
+proc doSave {} {
+  global currentFile
+  global cmdIdx
+  global cmdLast
+  set cmdIdx $cmdLast
+
+  if {[string length $currentFile] == 0} {
+    doSaveAs 
+  } else {
+    set f [open $currentFile w]
+    puts $f [.m.s.sql get 1.0 end]
+    close $f
+    setMsg "saved to $currentFile"
+  }
+
+}
+
+
+
+
+
+########################
+#
+# doNew
+#
+#   clear windows
+#
+proc doNew {} {
+  global currentFile
+  global cmdIdx
+  global cmdLast
+  set cmdIdx $cmdLast
+
+  clearoutput
+  clearsql
+
+  setMsg ""
+  focus .m.s.sql
+
+  set currentFile ""
+}
+
+
+
+########################
+#
+# chkMsg
+#
+#   check for server message, add to result window if not null
+#
+
+proc chkMsg {} {
+  global sybmsg
+
+  if {[string length $sybmsg(msgtext)] > 0} {
+    set msgs [split $sybmsg(msgtext) \n]
+    set msgn [split $sybmsg(msgno)   \n]
+    set i 0
+    foreach f $msgs {
+      set msgno ""
+      catch {set msgno [lindex $msgn $i]}
+      .m.o.out insert end "$msgno: $f"
+      incr i
+    }
+  }
+
+}
+
+
+########################
+#
+# insSql
+#
+#   insert the current Sql into the cmdRing
+#
+
+proc insSql {} {
+  global cmdRing
+  global cmdIdx
+  global cmdLast
+
+  set currentSql [.m.s.sql get 1.0 end]
+
+  # don't save null buffers
+  if {[string length [string trim $currentSql]] == 0} {
+    return
+  }
+
+  set cmdRing($cmdLast) $currentSql
+
+  set cmdIdx $cmdLast
+
+  incr cmdLast
+  if {$cmdLast > 9} {
+    set cmdLast 0
+  }
+
+}
+
+########################
+#
+# prevSql
+#
+#   save current sql window, replace with previous (dir=-1) or next (dir=1)
+#
+
+proc prevSql {dir} {
+  global cmdRing
+  global cmdIdx
+  global cmdLast
+
+
+  set i 0
+  set result_lines ""
+
+  while {$i < 10 && [string length $result_lines] == 0} {
+    incr cmdIdx $dir
+
+    if {$cmdIdx < 0} {
+      set cmdIdx 9
+    }
+    if {$cmdIdx > 9} {
+      set cmdIdx 0
+    }
+    set result_lines $cmdRing($cmdIdx)
+    incr i
+  }
+
+  if {[string length $result_lines] > 0} {
+    .m.s.sql delete 1.0 end
+    .m.s.sql insert 1.0 "$result_lines"
+  }
+
+}
+
+
+########################
+#
+# repl_str
+#
+#   replicate a string n times
+#
+proc repl_str {str n} {
+  set s $str
+  for {set i 1} {$i < $n} {incr i} {
+    append s $str
+  }
+  return $s
+}
+
+
+########################
+#
+# doSql
+#
+#   exec existing sql source
+#
+proc doSql {} {
+  global syb
+  global sybmsg
+  global execCmd
+  global contFlag
+  global appendclear
+
+
+  set contFlag 1
+
+  set execCmd "set contFlag 0"
+  .m.mb.exec configure -text "Cancel" -state active
+ 
+  # first make a dash line, 256 chars long
+  set d [repl_str "----------------" 16]
+
+  set txtindx ""
+  set txtcols ""
+  set txtdata ""
+  set txtlens ""
+  set row ""
+  set cnt 0
+  set sql_str [.m.s.sql get 1.0 end]
+  set sql_filt ""
+  set lastfmt ""
+
+  if {$appendclear} clearoutput
+
+  # filter out lines beginning with "#" or lines with "go"
+  foreach f [split $sql_str \n] {
+    # filter out comments
+    set  ex1 [regexp -nocase "^#.*$|^ *#.*$" $f]
+    # filter out "go"s
+    set  ex2 [regexp -nocase "^go.*$|^ *go.*$" $f]
+    if !$ex1$ex2 {
+      append sql_filt "$f\n"
+    } else {
+      append sql_filt "\n"
+    }
+  }
+
+  if {[string length $sql_filt] == 0} {
+    setMsg "No SQL to execute"
+    set execCmd doSql
+    .m.mb.exec configure -text "Execute" -state active
+    return
+  }
+
+  insSql
+  setMsg "Running SQL"
+  sybcancel $syb
+  set dbret [catch {sybsql $syb $sql_filt}]
+
+  if {$dbret==1} {
+    setMsg "Error: line $sybmsg(line): $sybmsg(msgno) : $sybmsg(msgtext)"
+    set execCmd doSql
+    .m.mb.exec configure -text "Execute" -state active
+    return
+  } else {
+    setMsg "SQL finished, getting results"
+    chkMsg
+  }
+
+  set fmt ""
+  if {[string compare $sybmsg(nextrow) NO_MORE_ROWS] != 0} {
+    set row [sybnext $syb]
+    chkMsg
+  }
+  set lastnext $sybmsg(nextrow)
+
+  while {$contFlag && \
+	 (([string compare $sybmsg(nextrow) NO_MORE_RESULTS] != 0) || \
+          ([string length $sybmsg(retstatus)] > 0) ) }  {
+
+    if {[string length $sybmsg(retstatus)] > 0} {
+      set row [sybretval $syb]
+      chkMsg
+      set fmt ""
+    }
+
+    if {[string length $fmt] == 0} {
+      set col_names [sybcols $syb]
+      chkMsg
+      # extract text columns into separate areas
+      set i [lsearch $sybmsg(coltypes) text]
+      while {$i >= 0} {
+	lappend txtindx $i
+	lappend txtcols [lvarpop col_names $i]
+	lappend txtlens [lvarpop sybmsg(collengths) $i]
+	lvarpop sybmsg(coltypes) $i
+        set i [lsearch $sybmsg(coltypes) text]
+      }
+      set fmt [formatCols $col_names $sybmsg(coltypes) $sybmsg(collengths)]
+      if {[string compare $lastfmt $fmt] != 0} { 
+	set lastfmt $fmt
+        .m.o.out insert end [eval format \"$fmt\" $col_names]
+        set dash $col_names
+        for {set i 0} {$i < [llength $dash]} {incr i} {
+	  set dash [lreplace $dash $i $i $d]
+        }
+        .m.o.out insert end [eval format \"$fmt\" $dash]
+      }
+    }
+
+    if {[string length $row] == 0} {
+      set fmt ""
+    }  else {
+      set txtdata ""
+      foreach i $txtindx {
+        lappend txtdata [lvarpop row $i]
+      }
+      .m.o.out insert end [eval format \"$fmt\" $row]
+      incr cnt
+      if {[llength $txtindx] > 0} {
+	set i 0
+	foreach t $txtcols {
+	  .m.o.out insert end "" [lindex $txtcols $i]
+	  .m.o.out insert end [string range $d 0 30]
+	  eval .m.o.out insert end [split [lindex $txtdata $i] \n]
+	  .m.o.out insert end "" 
+	}
+      }
+    }
+
+    set row [sybnext $syb]  
+    chkMsg
+    if {[string compare $lastnext $sybmsg(nextrow)] != 0} {
+      set fmt ""
+      set txtindx ""
+      set txtcols ""
+      set txtdata ""
+      set txtlens ""
+      set lastnext $sybmsg(nextrow)
+    }
+
+    if {$cnt % 20 == 0} {
+      setMsg "$cnt rows so far..."
+      update
+    }
+
+
+  }
+
+
+  if {$contFlag == 1} {
+    setMsg "SQL finished, $cnt rows returned "
+  } else {
+    setMsg "SQL interrupted, $cnt rows returned "
+    sybcancel $syb
+  }
+
+  set execCmd doSql
+  .m.mb.exec configure -text "Execute" -state active
+
+}
+
+########################
+#
+# lempty and lvarpop tcl-only implementations
+#
+
+proc lempty {l} {
+  return [expr [llength $l] == 0 ? 1 : 0] 
+}
+ 
+proc lvarpop {v args} {
+  upvar $v mylist
+  set argl [llength $args]
+  if {$argl >=1} {
+      set idx [lindex $args 0]
+  } else {
+      set idx 0
+  }
+  set ret [lindex $mylist $idx]
+  if {$argl >= 2} {
+      set mylist [lreplace $mylist $idx $idx [lindex $args 1]]
+  } else {
+      set mylist [lreplace $mylist $idx $idx]
+  }
+  return $ret
+}
+
+proc max {x y} {
+  return [expr $x > $y ? $x : $y]
+}
+
+
+########################
+#
+# formatCols
+#
+#   return a format to use in column printing
+#   names, types, and lengths are lists of equal size
+#
+proc formatCols {names types lengths} {
+  global sybmsg
+  
+  set floatprec 20 
+  if {[catch {expr "int($sybmsg(floatprec)) + 0"}] == 0} {
+    if {int($sybmsg(floatprec)) > 0} {
+      set floatprec [expr "int($sybmsg(floatprec)) + 3"]
+    }
+  }
+  set fmt ""
+ 
+  while {! [lempty $names] } {
+    set t [lvarpop types]
+    set l [lvarpop lengths]
+    set n [lvarpop names]
+
+    # set a length based on type
+    # text, image, and binary get defaults
+
+    case $t {
+      {int}   {set len 12 ; set just "" }
+      {tinyint}   {set len 4 ; set just "" }
+      {smallint}   {set len 6 ; set just "" }
+      {float real}   {set len $floatprec ; set just "" }
+      {numeric decimal}   {set len 38 ; set just "" }
+      {*money} {set len 17 ; set just "" }
+      {*date}  {set len 26 ; set just - }
+      {*char}  {set len $l ; set just - }
+      {default} {set len 32 ; set just - }
+    }
+
+    # make sure length is as long as colunm name 
+    set len [max $len [string length $n]]
+
+    append fmt "%${just}${len}.${len}s "
+
+  }
+  return $fmt
+}
+
+
+########################
+#
+# showFields
+#
+#   create a toplevel window with a table's fields
+#
+proc showFields {tab} {
+  global syb
+  global sybmsg
+
+  set plist ""
+  set dbname db
+
+  # use to use "sp_help tabname", changed to get the info directly from
+  # system tables, now shows full column name to 30 characters
+  # (thanks to Paul Friberg for this change)
+
+  sybsql $syb "select name, type, length, nulls from rbw_columns \
+	       where  tname= '$tab' order by seq"
+
+  sybnext $syb {
+    set n @1
+    set t @2
+    if {[string match "*CHAR" $t]} {
+      set t ${t}([lindex @0 2])
+    }
+    switch @4 {
+      N {set notnull "not null"}
+      default {set notnull ""}
+    }
+    lappend plist [format "%-30.30s %-15.15s %s" $n $t $notnull]
+  }
+
+  if {[llength $plist] == 0} {
+    setMsg "No fields in table $tab"
+    return
+  }
+  pickList .$dbname:$tab Columns 430x300 $plist "" filtCols
+}
+
+
+
+########################
+#
+# showTables
+#
+#   create a toplevel window with user tables
+#
+proc showTables {} {
+  global syb
+  global sybmsg
+
+  set plist ""
+  set dbname db
+  sybsql $syb "select name from rbw_tables order by name"
+
+  sybnext $syb {lappend plist @0}
+
+  if {[llength $plist] == 0} {
+    setMsg "No user tables in $dbname"
+    return
+  }
+  pickList .$dbname:Tables Tables 200x400 [lsort $plist] showFields 
+}
+
+
+
+########################
+#
+# getView
+#
+#   create a toplevel window with user object text
+#
+proc getView {objname} {
+  global syb
+  global sybmsg
+
+  set sybmsg(fixedchar) "yes"
+  set dbname db
+  sybsql $syb "select text from rbw_viewtext \
+		      where name = '$objname' order by seq "
+
+  set plist ""
+  set row [lindex [sybnext $syb] 0]
+  while {[string compare $sybmsg(nextrow) REG_ROW] == 0} {
+    append  rows $row 
+    set row [lindex [sybnext $syb] 0]
+  }
+  eval lappend plist [split $rows \n]
+  pickList .$dbname:$objname "Object Text" 600x300 $plist ""
+  set sybmsg(fixedchar) ""
+}
+
+
+
+########################
+#
+# showViews
+#
+#   create a toplevel window with user objects
+#
+proc showViews {args} {
+  global syb
+  global sybmsg
+
+  setMsg ""
+  set plist ""
+  set dbname db
+  sybsql $syb "select name from rbw_views order by name"
+
+  sybnext $syb {lappend plist @0}
+
+  if {[llength $plist] == 0} {
+    setMsg "No views in $dbname"
+    return
+  }
+  pickList .$dbname:$objclass $objclass 200x250 $plist getView
+}
+
+########################
+#
+# getMacro
+#
+#   create a toplevel window with user object text
+#
+proc getMacro {objname} {
+  global syb
+  global sybmsg
+
+  set sybmsg(fixedchar) "yes"
+  set dbname db
+  sybsql $syb "select text from rbw_macros \
+		      where name = '$objname' "
+
+  set plist ""
+  set row [lindex [sybnext $syb] 0]
+  while {[string compare $sybmsg(nextrow) REG_ROW] == 0} {
+    append  rows $row 
+    set row [lindex [sybnext $syb] 0]
+  }
+  eval lappend plist [split $rows \n]
+  pickList .$dbname:$objname "Object Text" 600x300 $plist ""
+  set sybmsg(fixedchar) ""
+}
+
+
+
+########################
+#
+# showMacros
+#
+#   create a toplevel window with user objects
+#
+proc showMacros {args} {
+  global syb
+  global sybmsg
+
+  setMsg ""
+  set plist ""
+  set dbname db
+  sybsql $syb "select name from rbw_macros order by name"
+
+  sybnext $syb {lappend plist @0}
+
+  if {[llength $plist] == 0} {
+    setMsg "No macros in $dbname"
+    return
+  }
+  pickList .$dbname:$objclass $objclass 200x250 $plist getMacro
+}
+
+
+
+proc generalHelp {} {
+  tk_dialog .general_help "General Help" "Windowing ISQL is a subset of the \
+  Sybase ISQL command. "  "" 0 OK
+}
+
+proc menuHelpFile {} {
+  tk_dialog .general_help "Help - File Menu" "File Menu\n\n\
+  New - Clears SQL and Result windows, allows entry of SQL code. \n \
+  Open - Prompts for a file containing SQL code.\n \
+  Save - Saves the contents of the SQL window into the current filename.\n \
+  Save As - Saves the contents of the SQL window, prompting for filename.\n\n \
+  Exit - Exits Windowing ISQL with confirmation.\n\
+  " "" 0 OK
+}
+
+proc menuHelpOut {} {
+  tk_dialog .general_help "Help - Results Menu" "Results Menu\n\n\
+  Clear - Clears the Results window.\n\
+  Save As - Saves the contents of the Results window into a file.\n\
+  Print - Prints the contents of the Results window to the 'lp' command.\n\
+  Font Size - Set the size of the Results window font.\n\
+  " "" 0 OK
+}
+
+proc menuHelpOpt {} {
+  tk_dialog .general_help "Help - Options Menu" "Options Menu\n\n\
+  Set Null Value - starts dialog to set value to return for NULL.\n\
+  " "" 0 OK
+}
+
+
+proc menuHelpDB {} {
+  tk_dialog .general_help "Help - Database Menu" "Database Menu\n\n\
+  All available databases in the server are displayed.  Selecting a \
+  database will cause that database to be used. \
+  " "" 0 OK
+}
+
+proc menuHelpObjs {} {
+  tk_dialog .general_help "Help - Objects Menu" "Objects Menu\n\n\
+  Selecting a object type will display a list of objects \
+  present in the database. \n\n\
+  Selecting an object in the display list will display the detail of \
+  the selected object. \
+  " "" 0 OK
+}
+
+proc menuHelpExec {} {
+  tk_dialog .general_help "Help - Execute Menu" "Execute Menu\n\n\
+  The currently displayed SQL code is executed.  Results are displayed \
+  in the Results window.\n\nLines beginning with \
+  a pound sign \"#\" are treated as comments.  \"go\" is not required \
+  and is treated as a comment.\n\n\
+  Any error messages associated with the \
+  SQL code is displayed in the message area. \n\n\
+  Control-Return and Shift-Return in the SQL window are bound as accelerator \
+  keys for Execute. \
+  Control-Up, Shift-Up, Control-Down, Shift-Down access\
+  the SQL save buffer to recall previous commands.\
+  " "" 0 OK
+}
+
+proc aboutHelp {} {
+  tk_dialog .general_help "Help - About" "Windowing ISQL\nVersion 2.5\n \
+  \nAugust, 1997\n\nTom Poindexter" "" 0 OK
+}
+
+
+
+########################
+#
+# pickList
+#
+#   return a selection from a listbox by calling a proc
+#
+
+proc pickList {win heading geom plist callproc {filtproc NoFilterProc}} {
+  set win_title $win
+  regsub -all {_} $win_title " " win_title
+  set win [string tolower $win]
+  
+  catch {destroy $win}
+  toplevel $win
+  wm title $win [string range $win_title 1 end]
+
+  set doproc [string length [info commands $callproc]]
+ 
+  # try to place window away from the main toplevel
+  set topgeom [split [split [winfo geom .] x] +]
+  set newx [expr {[lindex $topgeom 1] + [lindex [lindex $topgeom 0] 0]} ]
+  set newy [expr {[lindex $topgeom 2] + 10}]
+  #set newy [expr {[lindex $topgeom 2] + [lindex [lindex $topgeom 0] 1]} ]
+
+  wm geom $win ${geom}+${newx}+$newy
+  set w [lindex [split $geom x] 0]
+  set h [lindex [split $geom x] 1]
+  wm minsize $win $w $h
+
+  frame $win.l 
+  frame $win.f 
+  frame $win.b -relief sunken -borderwidth 1 -bg blue
+
+  label $win.l.l -text $heading -anchor w \
+		 -font "-*-courier-*-r-*-*-14-*-*-*-*-*-*-*" 
+  scrollbar $win.f.vert -orient vertical -command "$win.f.box yview" \
+			-relief sunken
+  listbox $win.f.box -yscroll "$win.f.vert set"  -relief sunken \
+	 -selectmode extended \
+	 -font "-*-courier-*-r-*-*-14-*-*-*-*-*-*-*" 
+  
+  selection handle $win.f.box "handleList $win.f.box $filtproc"
+
+  if $doproc {
+    bind $win.f.box <Double-1> "$win.b.ok invoke"
+  }
+
+  foreach lem $plist {
+    $win.f.box insert end $lem
+  }
+
+  if $doproc {
+    button $win.b.ok  -text "OK"     -relief raised -borderwidth 2 -command \
+        "catch \{ $callproc \[$win.f.box get \[$win.f.box curselection\]\] \}"
+  }
+  button $win.b.can -text "Cancel" -relief raised -borderwidth 2 \
+		-command "destroy $win"
+
+  pack $win.l.l    -side top -fill x -anchor nw
+  pack $win.f.vert -side right -fill both 
+  pack $win.f.box  -side left -fill both -expand 1
+
+  if $doproc {
+    pack $win.b.ok -side left -fill x -expand 1
+  }
+  pack $win.b.can  -side right -fill x -expand 1
+
+  pack $win.l -side top -fill x
+  pack $win.b -side bottom -fill x
+  pack $win.f -side top -fill both -expand 1
+
+  $win.f.box select set 0
+
+  #bind $win.f.box <Any-Button1-Motion> "$win.f.box size"
+  #bind $win.f.box <Any-Button2-Motion> "$win.f.box size"
+}
+
+
+proc setNull {} {
+  global sybmsg
+  global doExp
+  global nullVal
+  set doExp 0
+
+  set nullVal $sybmsg(nullvalue)
+
+  catch {destroy .snull}
+  toplevel .snull -class Dialog
+
+  wm transient .snull .
+  set xpos [expr [winfo rootx .]+[winfo width .]/3]
+  set ypos [expr [winfo rooty .]+[winfo height .]/3]
+  wm geom .snull +${xpos}+$ypos
+  wm title .snull "Set Null Value"
+
+  frame .snull.f1 -relief sunken -borderwidth 1
+
+  label .snull.f1.l -text " Value "
+  entry .snull.f1.e -width 30 -relief sunken -textvariable nullVal
+  bind  .snull.f1.e <KeyPress-Return> ".snull.f3.app invoke"
+
+  pack .snull.f1.l -side left 
+  pack .snull.f1.e -side left -fill x -expand 1
+
+  message .snull.f2 -text {(use "default" for default behavior)} -aspect 1200
+
+  frame .snull.f3 -relief sunken -borderwidth 1
+  button .snull.f3.app -width 10 -text "Set" \
+                                      -command { set doExp 1 ; destroy .snull}
+  button .snull.f3.can -width 10 -text "Cancel" \
+                                      -command {set doExp 0 ; destroy .snull}
+
+  pack .snull.f3.app .snull.f3.can -side left -expand 1 -fill x
+
+  pack  .snull.f1 .snull.f2 .snull.f3  -side top -padx 10 -pady 5 -fill both
+
+  grab .snull
+  tkwait window .snull
+
+
+  if {$doExp == 0} return
+
+  set sybmsg(nullvalue) [string trim $nullVal]
+
+}
+
+
+
+proc setFloat {} {
+  global sybmsg
+  global doExp
+  global floatprec
+  set doExp 0
+
+  set floatprec $sybmsg(floatprec)
+
+  catch {destroy .sfloat}
+  toplevel .sfloat -class Dialog
+
+  wm transient .sfloat .
+  set xpos [expr [winfo rootx .]+[winfo width .]/3]
+  set ypos [expr [winfo rooty .]+[winfo height .]/3]
+  wm geom .sfloat +${xpos}+$ypos
+  wm title .sfloat "Set Float Precision"
+
+  frame .sfloat.f1 -relief sunken -borderwidth 1
+
+  label .sfloat.f1.l -text " Value "
+  entry .sfloat.f1.e -width 30 -relief sunken -textvariable floatprec
+  bind  .sfloat.f1.e <KeyPress-Return> ".sfloat.f3.app invoke"
+
+  pack .sfloat.f1.l -side left 
+  pack .sfloat.f1.e -side left -fill x -expand 1
+
+  message .sfloat.f2 -text {(blank for default precision)} -aspect 1200
+
+  frame .sfloat.f3 -relief sunken -borderwidth 1
+  button .sfloat.f3.app -width 10 -text "Set" \
+                                      -command { set doExp 1 ; destroy .sfloat}
+  button .sfloat.f3.can -width 10 -text "Cancel" \
+                                      -command {set doExp 0 ; destroy .sfloat}
+
+  pack .sfloat.f3.app .sfloat.f3.can -side left -expand 1 -fill x
+
+  pack  .sfloat.f1 .sfloat.f2 .sfloat.f3  -side top -padx 10 -pady 5 -fill both
+
+  grab .sfloat
+  tkwait window .sfloat
+
+
+  if {$doExp == 0} return
+
+  set sybmsg(floatprec) [string trim $floatprec]
+
+}
+
+
+

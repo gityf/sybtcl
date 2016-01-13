@@ -1,0 +1,370 @@
+#!/usr/local/bin/wishx -f
+
+#
+# sp_who for sybtcl / Version 1.4
+#
+# Many thanks to David Hubbard & Tom Poindexter for 
+# beta-testing/debugging/improvements
+#
+# (c) 1995 Paul COURBIS - Under Gnu's copyleft license
+# plc@Quotient.fr
+#
+# To do :
+#   * Check that interval is an integer
+#   * Should trap sybases errors
+#   * add command line parsing for :
+#           o list size
+#           o time interval
+#           o user/password
+#           o server
+#
+
+package require Sybtcl
+
+if {[file isfile sign_on.tcl]} {
+    source sign_on.tcl
+} elseif {[file isfile [file join [file dirname [info script]] sign_on.tcl]]} {
+    source [file join [file dirname [info script]] sign_on.tcl]
+} elseif {[file isfile [file join [file dirname [info nameofexecutable]] sign_on.tcl]]} {
+    source [file join [file dirname [info nameofexecutable]] sign_on.tcl]
+}
+
+global server interval now intervalid env secorsecs user password sybhandle
+global opened WhoIsThere order_by_orders order_by order_by_stmnt order_by_text
+global removeflag sql_ignore
+
+set queue ""
+set display_password ""
+set interval 5
+set intervalid 0
+set opened 0
+
+set WhoIsThere "select
+convert( char(4),  spid ) + \" \" +
+convert( char(8),  sysprocesses.status ) + \" \" +
+convert( char(3),  blocked ) + \" \" +
+convert( char(8),  isnull(suser_name(suid),space(8)) ) + \" \" +
+convert( char(8),  isnull(db_name(dbid),space(8)) ) + \" \" +
+convert( char(16), cmd ) + \" \" +
+convert( char(7),  cpu ) + \" \" +
+convert( char(7),  physical_io ) + \" \" +
+convert( char(7),  memusage ) + \" \" +
+convert( char(8),  hostname ) + \" \" +
+convert( char(5),  hostprocess ) + \" \" +
+convert( char(12), program_name )
+from sysprocesses
+"
+
+set sql_ignore " where sysprocesses.hostname != \"\""
+
+
+set order_by_orders {
+   "spid"
+   "kpid"
+   "enginenum"
+   "status"
+   "suid"
+   "hostname"
+   "program_name"
+   "hostprocess"
+   "cmd"
+   "cpu"
+   "physical_io"
+   "memusage"
+   "blocked"
+   "dbid"
+   "uid"
+   "gid"
+}
+
+# Default orders
+set order_by { "dbid" "hostname" "hostprocess" }
+
+proc UpdateList { id interval } {
+   global sybhandle WhoIsThere opened now intervalid order_by_stmnt
+   global removeflag sql_ignore
+
+   set lb .results.list.list
+
+   pack forget .results.messages
+
+   if { $opened == 1 } {
+      set now [ exec date ]
+
+      set cmde "$WhoIsThere"
+      if { $removeflag == 1 } {
+	 set cmde "$cmde $sql_ignore"
+      }
+
+      sybsql $sybhandle "$cmde $order_by_stmnt"
+
+      set n 0
+
+      set line [ sybnext $sybhandle ]
+
+      set h_index [ $lb curselection ]
+      if {$h_index != {}} {
+        set highlighted [ lindex [ $lb get $h_index ] 0 ]
+      } else {
+        set highlighted {}
+      }
+
+      while { $line != "" } {
+	 set size [ $lb size ]
+	 set who [ lindex $line 0 ]
+
+	 if { $size > $n } {
+	    set old [ $lb get $n ]
+
+	    if { $old != $who } {
+	       $lb delete $n
+	       $lb insert $n $who
+	    }
+	 } else {
+	       $lb insert end $who
+	 }
+         if {[lindex $who 0] == $highlighted} { $lb selection set $n }
+	 set n [expr $n + 1 ]
+         set line [ sybnext $sybhandle ]
+      }
+      # Clear out the rest of the listbox if needed
+      if {$n < [ $lb size ]} {.results.list.list delete $n end}
+
+      if { $intervalid == $id } {
+	 after [ expr $interval * 1000 ] [ list UpdateList $id $interval ]
+      }
+   }
+}
+
+proc SetOrderByStatement { } {
+   global order_by order_by_stmnt order_by_orders order_by_text
+
+   set order_by_stmnt ""
+   set order_by_text ""
+   set flag_comma 0
+
+   foreach crit $order_by {
+      if { $flag_comma == 1 } {
+	 set order_by_stmnt "$order_by_stmnt,"
+         set order_by_text "$order_by_text /"
+      } else {
+	 set order_by_stmnt "order by"
+	 set flag_comma 1
+      }
+
+      set order_by_stmnt "$order_by_stmnt sysprocesses.$crit"
+      set order_by_text "$order_by_text $crit"
+   }
+
+   UpdateList 0 0
+}
+
+proc ResetCriteria { } {
+   global order_by order_by_stmnt order_by_orders order_by_text
+   set order_by {}
+   SetOrderByStatement
+}
+
+proc AddCriteria { crit_name } {
+   global order_by order_by_stmnt order_by_orders order_by_text
+
+   set n [ lsearch $order_by $crit_name ]
+
+   if { $n != -1 } {
+      set order_by [ lreplace $order_by $n $n ]
+   }
+
+   set order_by [ linsert $order_by 0 $crit_name ]
+   SetOrderByStatement
+}
+
+SetOrderByStatement
+
+
+set legend "Spid Status    Blk Name     Database Command          Cpu     Phys IO Memory  Host     Pid   Program     "
+
+getSignOn 0
+
+wm geom . 635x375
+
+frame .defs
+   button .defs.monitor -text "Monitor"
+   .defs.monitor configure -command { 
+				       getSignOn 1
+				       ConnectSybase
+				    }
+   pack .defs.monitor -side left 
+
+   label .defs.server_label -text "server"
+   .defs.server_label configure -anchor w
+   pack  .defs.server_label -side left
+
+   label .defs.server -textvariable server
+   .defs.server configure -anchor w
+   pack  .defs.server -side left
+
+   label .defs.as -text " as "
+   .defs.as configure -anchor w
+   pack  .defs.as -side left
+
+   label .defs.user -textvariable user
+   .defs.user configure -anchor w
+   pack  .defs.user -side left
+
+   label .defs.intlabel -text " - Update every "
+   .defs.intlabel configure -anchor w
+   pack  .defs.intlabel -side left
+
+   entry .defs.update -textvariable interval
+   pack  .defs.update -side left
+   .defs.update configure -width 5
+   bind .defs.update  <Return> { ChangeInterval }
+
+   label .defs.intlabel2 -textvariable secorsecs
+   pack  .defs.intlabel2 -side left
+pack .defs -side top -fill x -pady 2m
+
+frame .order_by
+   menubutton .order_by.choices -text "Order by" -anchor e \
+      -menu .order_by.choices.menu -relief raised
+
+   menu .order_by.choices.menu
+
+   .order_by.choices.menu add command -label "Reset order by statement" \
+				      -command "ResetCriteria" 
+
+   .order_by.choices.menu add cascade -label "Sort ascending..." \
+				      -menu .order_by.choices.menu.ascending
+
+   .order_by.choices.menu add cascade -label "Sort descending..." \
+				      -menu .order_by.choices.menu.descending
+
+   menu .order_by.choices.menu.ascending 
+   menu .order_by.choices.menu.descending 
+
+   foreach crit $order_by_orders {
+      .order_by.choices.menu.ascending add command -label $crit \
+				     -command "AddCriteria \"$crit\""
+      .order_by.choices.menu.descending add command -label $crit \
+				     -command "AddCriteria \"$crit desc\""
+   }
+
+   pack .order_by.choices -side left
+
+   label .order_by.text -textvariable order_by_text
+   pack .order_by.text -side left
+pack .order_by -side top -fill x -pady 2m
+
+set removeflag 1
+
+frame .options
+   checkbutton .options.ignore -variable removeflag -anchor w \
+		   -text "Ignore processes with no host (internal processes)" \
+		   -command "UpdateList -1 0"
+   pack .options.ignore -side top -fill x
+pack .options -side top -fill x -pady 2m
+
+
+frame .buttons
+   button .buttons.update -text "update"
+   .buttons.update configure -command "UpdateList -1 0"
+   pack .buttons.update -side left -padx 2m
+
+   button .buttons.cancel -text "kill"
+   .buttons.cancel configure -command Kill
+   if {$user == {sa}} {
+     pack .buttons.cancel -side left -padx 2m
+   }
+
+   button .buttons.quit -text "quit" -command "exit"
+   pack .buttons.quit -side left -padx 2m
+pack .buttons -side bottom -pady 2m
+frame .results
+   label .results.date -textvariable now
+   pack .results.date -side top
+
+   label .results.legend -text $legend
+   .results.legend configure -width 105
+   .results.legend configure -anchor w
+   .results.legend configure -font fixed
+   .results.legend configure -justify left
+   pack .results.legend -side top
+
+   frame .results.list
+      scrollbar .results.list.sb -command ".results.list.list yview"
+
+      listbox .results.list.list -relief raised \
+        -yscrollcommand ".results.list.sb set" -selectmode single
+      .results.list.list  configure -width 100 -height 10
+      .results.list.list  configure -font fixed
+
+      pack .results.list.sb -side right -fill y
+      pack .results.list.list -side right -fill both
+
+   pack .results.list -side top -fill both -expand 1
+
+   label .results.messages
+
+pack .results -side top -pady 2m -fill y -expand 1
+
+
+proc Kill {} {
+
+   global sybhandle
+
+   set n [ .results.list.list curselection ]
+
+   if { $n != "" } {
+      set procdef [ .results.list.list get $n ]
+
+      scan $procdef "%s" id
+
+      .results.messages configure -text "Killing process $id"
+      set command "kill $id"
+      sybsql $sybhandle "$command"
+      UpdateList 0 0
+      .results.messages configure -text "Sent \"kill $id\""
+      pack .results.messages -side top -after .results.list
+   }
+}
+
+proc ChangeInterval {} {
+   global intervalid interval secorsecs
+
+   if { $interval > 1 } {
+      set secorsecs "seconds"
+   } else {
+      set secorsecs "second"
+   }
+
+   set intervalid [ expr $intervalid + 1 ]
+
+   UpdateList $intervalid $interval
+}
+
+proc ConnectSybase {} {
+   global server user password sybhandle opened
+   global intervalid interval
+
+   if { $opened == 1 } {
+      sybclose $sybhandle
+      set opened 0
+      if {$user == {sa}} {
+        pack .buttons.cancel -side left -padx 2m -after .buttons.update
+      } else {
+        pack forget .buttons.cancel
+        pack forget .results.messages
+      }
+   }
+
+   catch { sybconnect $user $password $server sp_who } sybhandle
+   sybuse $sybhandle "master"
+
+   set opened 1
+
+   set intervalid [ expr $intervalid + 1 ]
+   UpdateList $intervalid $interval
+}
+
+ConnectSybase
+ChangeInterval

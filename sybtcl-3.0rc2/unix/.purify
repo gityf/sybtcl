@@ -1,0 +1,6 @@
+suppress umr TclCleanupByteCode
+suppress umr TclGetExceptionRangeForPc
+suppress sbr dbfcmd
+suppress umr __sigaction; sigaction; dbattention
+suppress umr __sigaction; _libc_sigaction; dbattention
+suppress umr com__exctnumetomny8

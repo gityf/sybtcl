@@ -1,0 +1,82 @@
+# syb10money.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+# 
+# exercise various sybmoney operations, check operators against the server
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+test sybmoney-1.1 {sybmoney: add} {
+  set res1 [sybmoney add 922,337,203,685,476.55 1]
+  sybsql $syb_hand {select convert(money,'922,337,203,685,476.55') + 
+		convert(money,1)}
+  set res2 [lindex [sybnext $syb_hand] 0]
+  string compare $res1 $res2
+} {0}
+
+test sybmoney-1.2 {sybmoney: add overflow} {
+  catch {sybmoney add 922,337,203,685,477.55 1} res1
+  set res1
+} {sybmoney: value overflow}
+
+test sybmoney-1.3 {sybmoney: sub} {
+  set res1 [sybmoney sub -922,337,203,685,476.55 1]
+  sybsql $syb_hand {select convert(money,'-922,337,203,685,476.55') - 
+		convert(money,1)}
+  set res2 [lindex [sybnext $syb_hand] 0]
+  string compare $res1 $res2
+} {0}
+
+test sybmoney-1.4 {sybmoney: sub overflow} {
+  catch {sybmoney sub -922,337,203,685,477.55 1} res1
+  set res1
+} {sybmoney: value overflow}
+
+test sybmoney-1.5 {sybmoney: div} {
+  set res1 [sybmoney div -922,337,203,685,476.55 5]
+  sybsql $syb_hand {select convert(money,'-922,337,203,685,476.55') / 
+		convert(money,5)}
+  set res2 [lindex [sybnext $syb_hand] 0]
+  string compare $res1 $res2
+} {0}
+
+test sybmoney-1.6 {sybmoney: div by zero} {
+  catch {sybmoney div -922,337,203,685,477.55 0} res1
+  set res1
+} {sybmoney: value overflow or divide by zero}
+
+test sybmoney-1.7 {sybmoney: div} {
+  set res1 [sybmoney div -922,337,203,685,476.55 5]
+  sybsql $syb_hand {select convert(money,'-922,337,203,685,476.55') / 
+		convert(money,5)}
+  set res2 [lindex [sybnext $syb_hand] 0]
+  string compare $res1 $res2
+} {0}
+
+test sybmoney-1.8 {sybmoney: mul} {
+  set res1 [sybmoney mul 203685476.55 52342.12]
+  sybsql $syb_hand {select convert(money,203685476.55) * 
+		convert(money,52342.12)}
+  set res2 [lindex [sybnext $syb_hand] 0]
+  string compare $res1 $res2
+} {0}
+
+test sybmoney-1.9 {sybmoney: mul overflow} {
+  catch {sybmoney mul -922,337,203,685,476.55 -922,337,203,685,476.55} res1
+  set res1
+} {sybmoney: value overflow}
+
+test sybmoney-1.10 {sybmoney: compare equal} {
+  sybmoney cmp -922,337,203,685,476.55 -922,337,203,685,476.55
+} {0}
+
+test sybmoney-1.11 {sybmoney: compare less than} {
+  sybmoney cmp -922,337,203,685,476.55 0
+} {-1}
+
+test sybmoney-1.12 {sybmoney: compare greater than} {
+  sybmoney cmp 922,337,203,685,476.55 0
+} {1}
+
+

@@ -1,0 +1,32 @@
+# syb09retval.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+# 
+# exercise various sybretval
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+test sybretval-1.1 {sybretval: big test (just about every feature)} {
+  sybsql $syb_hand {
+    declare @my_result int
+    exec sybtcl___test1 3, 7, @res=@my_result output
+    select @my_result
+   }
+  set result_check_1 $sybmsg(retstatus)
+  set cnt1 0
+  # fetch rows until no more rows
+  sybnext $syb_hand {incr cnt1}
+  # fetch select @x
+  sybnext $syb_hand {incr cnt1}
+  set result_check_2 $sybmsg(retstatus)
+  set print_msg $sybmsg(msgtext)
+  set out_result [sybretval $syb_hand]
+  set out_cols [sybcols $syb_hand]
+  set out_len $sybmsg(collengths)
+  set out_type $sybmsg(coltypes)
+  set my_result [sybnext $syb_hand]
+  list $result_check_1 $result_check_2 $cnt1 $out_result $print_msg $out_cols $out_len $out_type $my_result
+} {{} 10 31 21 {sybtcl___test1 got 21} @res 4 int 21}
+
+

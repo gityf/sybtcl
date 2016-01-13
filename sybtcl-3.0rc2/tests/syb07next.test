@@ -1,0 +1,99 @@
+# syb07next.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+# 
+# exercise various sybnext return types, with sybmsg() programmer values
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+test sybnext-1.1 {sybnext: default nullvalue char} {
+  set sybmsg(nullvalue) default
+  sybsql $syb_hand {select convert(varchar(255),null)}
+  set row [sybnext $syb_hand]
+  format [list $row $sybmsg(nextrow) $sybmsg(isnull)]
+} {{{}} REG_ROW 1}
+
+test sybnext-1.2 {sybnext: default nullvalue int} {
+  set sybmsg(nullvalue) default
+  sybsql $syb_hand {select convert(int,null)}
+  set row [sybnext $syb_hand]
+  format [list $row $sybmsg(nextrow) $sybmsg(isnull)]
+} {0 REG_ROW 1}
+
+test sybnext-1.3 {sybnext: default nullvalue date} {
+  set sybmsg(nullvalue) default
+  sybsql $syb_hand {select convert(datetime,null)}
+  set row [sybnext $syb_hand]
+  format [list $row $sybmsg(nextrow) $sybmsg(isnull)]
+} {{{}} REG_ROW 1}
+
+test sybnext-1.4 {sybnext: user nullvalue} {
+  set sybmsg(nullvalue) isnull
+  sybsql $syb_hand {select convert(varchar(255),null)}
+  set row [sybnext $syb_hand]
+  set sybmsg(nullvalue) default
+  format [list $row $sybmsg(nextrow) $sybmsg(isnull)]
+} {isnull REG_ROW 1}
+
+test sybnext-1.5 {sybnext: user nullvalue} {
+  set sybmsg(nullvalue) isnull
+  sybsql $syb_hand {select convert(varchar(255),null)}
+  set row [sybnext $syb_hand]
+  set sybmsg(nullvalue) default
+  format [list $row $sybmsg(nextrow) $sybmsg(isnull)]
+} {isnull REG_ROW 1}
+
+test sybnext-1.6 {sybnext: user dateformat} {
+  set sybmsg(dateformat) "a YYYY YY MONTH MON MM DD b hh mm ss dy dw ms c"
+  sybsql $syb_hand {select convert(datetime,'September 23, 1957 19:50:01:003')}
+  set row [lindex [sybnext $syb_hand] 0]
+  set sybmsg(dateformat) ""
+  set row
+} {a 1957 57 September Sep 09 23 b 19 50 01 266 02 003 c}
+
+test sybnext-1.7 {sybnext: binaryashex as binary} {
+  set sybmsg(binaryashex) 0
+  sybsql $syb_hand {select v_varbinary_255 from sybtcl___tests where v_smallint=0}
+  set row [lindex [sybnext $syb_hand] 0 ]
+  set row
+} "\x30\x20\x31\x32\x33\x34\x35\x36\x37\x38\x39\x30"
+
+test sybnext-1.8 {sybnext: binaryashex as hexstring} {
+  set sybmsg(binaryashex) 1
+  sybsql $syb_hand {select v_varbinary_255 from sybtcl___tests where v_smallint=0}
+  set row [lindex [sybnext $syb_hand] 0 ]
+  set sybmsg(binaryashex) 0
+  set row
+} {302031323334353637383930}
+
+test sybnext-1.9 {sybnext: fixedchar default} {
+  set sybmsg(fixedchar) 0
+  sybsql $syb_hand {select v_char_10 from sybtcl___tests where v_smallint=0}
+  set row [sybnext $syb_hand]
+  set row
+} {{0 x}}
+
+test sybnext-1.10 {sybnext: fixedchar on} {
+  set sybmsg(fixedchar) 1
+  sybsql $syb_hand {select v_char_10 from sybtcl___tests where v_smallint=0}
+  set row [sybnext $syb_hand]
+  set sybmsg(fixedchar) 0
+  set row
+} {{0 x       }}
+
+# Yes, this query really needs the order by along with the count(*) to
+# reproduce the original error in Sybtcl 3.0b2 caused by calling dbpoll
+# inside the C code for sybnext.  This originally resulted in an error and
+# a killed connection with sybmsg(dberr)==20020 and sybmsg(dberrstr)=
+# "Bad token from SQL Server: Datastream processing out of sync.".  This
+# was only reproducable on Solaris w/OpenClient 11.1.1 hitting srv 11.0.3.
+test sybnext-1.11 {sybnext: err in 3.0b2 caused by dbpoll() inside sybnext} {
+  sybsql $syb_hand {select count(*) from sybtcl___testnext order by v_int}
+  set res 0
+  set cnt 0
+  set cmd [list sybnext $syb_hand {set res $c1; incr cnt} {} c1 1]
+  set caught [catch $cmd]
+  set testRes "caughtErr=$caught res=$res cnt=$cnt"
+} {caughtErr=0 res=300 cnt=300}
+

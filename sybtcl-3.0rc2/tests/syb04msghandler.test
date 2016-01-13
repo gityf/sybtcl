@@ -1,0 +1,53 @@
+# syb04msghandler.test
+# copyright tom poindexter, 1998
+# test suite for sybtcl
+#
+# exercise sybmsghandler
+#
+
+if {[info exists syb_hand] == 0} then {source defs}
+
+proc cnt_hndlr {args} {
+    global arg_cnt
+    set arg_cnt [llength $args]
+}
+proc lindex_hndlr {args} {
+    global msg_arg
+    set idx [lindex $args 0]
+    set args [lrange $args 1 end]
+    set msg_arg [lindex $args $idx]
+}
+
+test sybmsghandler-1.1 {sybmsghandler: count message arguments} {
+  global arg_cnt
+  set arg_cnt 0
+  sybmsghandler cnt_hndlr
+  sybsql $syb_hand "print 'hello world'"
+  sybmsghandler ""
+  set arg_cnt
+} {8}
+
+test sybmsghandler-1.2 {sybmsghandler: count message arguments plus one} {
+  global arg_cnt
+  set arg_cnt 0
+  sybmsghandler "cnt_hndlr first_arg"
+  sybsql $syb_hand "print 'hello world'"
+  sybmsghandler ""
+  set arg_cnt
+} {9}
+
+test sybmsghandler-1.3 {sybmsghandler: server print message} {
+  global msg_arg
+  set msg_arg ""
+  sybmsghandler "lindex_hndlr 4"
+  sybsql $syb_hand "print 'hello world'"
+  sybmsghandler ""
+  set msg_arg
+} {hello world}
+
+test sybmsghandler-1.4 {sybmsghandler: server print message via sybmsg} {
+  sybsql $syb_hand "print 'hello world'"
+  set sybmsg(msgtext)
+} {hello world}
+
+
